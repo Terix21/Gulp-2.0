@@ -1,0 +1,91 @@
+{
+  "name": "gulp",
+  "version": "1.0.0",
+  "description": "Sentinel — desktop web security testing workbench built with Electron, React, and Chakra UI.",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "clean": "gulp clean",
+    "build": "npm run build:metadata && gulp build",
+    "build:metadata": "node scripts/versioning/write-build-metadata.js",
+    "pack:win": "npm run build && electron-builder --win --dir",
+    "installer:win": "npm run build && electron-builder --win nsis",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "test:build": "npm run clean && npm run build && vitest --run --config vitest.build.config.js",
+    "dev": "gulp watch",
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "Trogon4081",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@babel/preset-env": "^7.29.2",
+    "@babel/preset-react": "^7.28.5",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/ui": "^4.1.2",
+    "cross-env": "^10.1.0",
+    "electron": "^41.1.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.25.4",
+    "gulp": "^5.0.1",
+    "gulp-clean": "^0.4.0",
+    "gulp-esbuild": "^0.14.1",
+    "gulp-sass": "^6.0.1",
+    "identity-obj-proxy": "^3.0.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "jsdom": "^26.1.0",
+    "sass": "^1.98.0",
+    "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^3.34.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@monaco-editor/react": "^4.7.0",
+    "@tanstack/react-table": "^8.21.3",
+    "framer-motion": "^12.10.5",
+    "http-mitm-proxy": "^1.1.0",
+    "monaco-editor": "^0.55.1",
+    "node-forge": "^1.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-icons": "^5.6.0",
+    "react-window": "^1.8.10",
+    "sqlite3": "^6.0.1"
+  },
+  "build": {
+    "appId": "com.trogon4081.gulp",
+    "productName": "Sentinel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist/main/index.js"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
