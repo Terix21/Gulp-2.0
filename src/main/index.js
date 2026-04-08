@@ -1,7 +1,7 @@
 const electron = require('electron');
 const { app, BrowserWindow, ipcMain, dialog } = electron;
 const fs = require('node:fs/promises');
-const path = require('path');
+const path = require('node:path');
 const caManager = require('./certs/ca-manager');
 const projectStore = require('./db/project-store');
 const protocolSupport = require('./proxy/protocol-support');
@@ -113,7 +113,7 @@ function getActiveWindow() {
 
 function sendToRenderer(channel, payload) {
   const target = getActiveWindow();
-  if (!target || !target.webContents) {
+  if (!target?.webContents) {
     return;
   }
   target.webContents.send(channel, payload);
@@ -121,7 +121,7 @@ function sendToRenderer(channel, payload) {
 
 function flushPendingConsoleLogs() {
   const target = getActiveWindow();
-  if (!target || !target.webContents || pendingConsoleLogs.length === 0) {
+  if (!target?.webContents || pendingConsoleLogs.length === 0) {
     return;
   }
 
@@ -137,13 +137,13 @@ function appendProcessOutputChunk(source, level, chunk) {
     return;
   }
 
-  const normalized = text.replace(/\r\n/g, '\n');
+  const normalized = text.replaceAll('\r\n', '\n');
   const buffered = `${processOutputBuffers[source] || ''}${normalized}`;
   const lines = buffered.split('\n');
   processOutputBuffers[source] = lines.pop() || '';
 
   lines
-    .map(line => line.replace(/\r/g, ''))
+    .map(line => line.replaceAll('\r', ''))
     .filter(line => line.trim().length > 0)
     .forEach(line => sendConsoleLog(level, source, line));
 }
@@ -212,7 +212,7 @@ function sendConsoleLog(level, source, message, detail) {
     level: String(level || 'info'),
     source: String(source || 'app'),
     message: String(message || ''),
-    detail: detail !== undefined ? stringifyLogValue(detail) : undefined,
+    detail: detail === undefined ? undefined : stringifyLogValue(detail),
     timestamp: Date.now(),
   };
 
@@ -222,7 +222,7 @@ function sendConsoleLog(level, source, message, detail) {
   }
 
   const target = getActiveWindow();
-  if (target && target.webContents) {
+  if (target?.webContents) {
     flushPendingConsoleLogs();
     target.webContents.send('console:log', payload);
     return;
@@ -253,7 +253,7 @@ function formatConsoleLogEntry(entry = {}) {
 
 async function exportConsoleEntries(entries = []) {
   const targetWindow = BrowserWindow.getFocusedWindow() || getActiveWindow() || null;
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const timestamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
   const defaultPath = path.join(app.getPath('documents'), `sentinel-app-log-${timestamp}.log`);
   const result = await dialog.showSaveDialog(targetWindow, {
     title: 'Export Sentinel App Logs',
@@ -278,7 +278,7 @@ async function exportConsoleEntries(entries = []) {
 
 function registerConsoleHandlers() {
   ipcMain.handle('console:export', async (_event, args = {}) => {
-    return exportConsoleEntries(args && args.entries);
+    return exportConsoleEntries(args?.entries);
   });
 }
 
@@ -296,7 +296,7 @@ async function loadProjectState() {
   let proxyRuntimeConfig = DEFAULT_PROXY_RUNTIME_CONFIG;
   if (typeof projectStore.getModuleState === 'function') {
     const proxyState = await projectStore.getModuleState('proxy');
-    if (proxyState && proxyState.runtimeConfig) {
+    if (proxyState?.runtimeConfig) {
       proxyRuntimeConfig = normalizeProxyRuntimeConfig(proxyState.runtimeConfig);
     }
   }
@@ -395,7 +395,7 @@ function registerProjectHandlers() {
 function registerExtensionHandlers() {
   ipcMain.handle('extensions:list', async () => {
     const result = extensionHost.list();
-    return { extensions: Array.isArray(result && result.extensions) ? result.extensions : [] };
+    return { extensions: Array.isArray(result?.extensions) ? result.extensions : [] };
   });
 
   ipcMain.handle('extensions:install', async (_event, args = {}) => {

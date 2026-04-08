@@ -299,7 +299,7 @@ function registerProxyHandlers(ipcMain, {
   interceptEngine.on('request', request => {
     const eventPayload = {
       request,
-      requestId: request && request.id ? request.id : '',
+      requestId: request?.id || '',
     };
 
     sendToRenderer('proxy:intercept:request', request);
@@ -314,7 +314,7 @@ function registerProxyHandlers(ipcMain, {
 
   interceptEngine.on('forward-error', payload => {
     sendToRenderer('proxy:intercept:error', payload);
-    sendConsoleLog('warn', 'proxy', `Forward error: ${payload && payload.requestId ? payload.requestId : ''}`, payload && payload.error ? String(payload.error) : undefined);
+    sendConsoleLog('warn', 'proxy', `Forward error: ${payload?.requestId || ''}`, payload?.error ? String(payload.error) : undefined);
   });
 
   historyLog.on('push', item => {
@@ -330,7 +330,7 @@ function registerProxyHandlers(ipcMain, {
 
   scannerEngine.on('progress', payload => {
     sendToRenderer('scanner:progress', payload);
-    if (payload && payload.finding) {
+    if (payload?.finding) {
       const findingPayload = {
         finding: payload.finding,
         scanId: payload.scanId || '',

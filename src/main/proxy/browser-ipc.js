@@ -33,7 +33,7 @@ function _verifyLeafAgainstSentinelCa(request) {
     return false;
   }
 
-  const certPem = request && request.certificate && request.certificate.data;
+  const certPem = request?.certificate?.data;
   if (!certPem || typeof certPem !== 'string') {
     return false;
   }
@@ -98,6 +98,27 @@ function clampEmbeddedBrowserBounds(targetWindow, bounds = {}) {
   };
 }
 
+function findActiveVisibleSession(sessions = []) {
+  return sessions.find(item => item.focused && item.visible && hasVisibleBrowserBounds(item.bounds)) || null;
+}
+
+function detachInactiveEmbeddedBrowserViews(targetWindow, activeSessionId) {
+  for (const [sessionId, entry] of embeddedBrowserViews.entries()) {
+    if (sessionId === activeSessionId) {
+      continue;
+    }
+
+    if (entry.attached && targetWindow?.contentView) {
+      try {
+        targetWindow.contentView.removeChildView(entry.view);
+      } catch {
+        // Ignore detach failures when re-syncing the Chromium host.
+      }
+    }
+    entry.attached = false;
+  }
+}
+
 function destroyEmbeddedBrowserView(sessionId) {
   const entry = embeddedBrowserViews.get(sessionId);
   if (!entry) {
@@ -105,7 +126,7 @@ function destroyEmbeddedBrowserView(sessionId) {
   }
 
   const targetWindow = _getActiveWindow();
-  if (targetWindow && targetWindow.contentView && entry.attached) {
+  if (targetWindow?.contentView && entry.attached) {
     try {
       targetWindow.contentView.removeChildView(entry.view);
     } catch {
@@ -114,8 +135,9 @@ function destroyEmbeddedBrowserView(sessionId) {
   }
 
   try {
-    if (entry.view && entry.view.webContents && typeof entry.view.webContents.isDestroyed === 'function' && !entry.view.webContents.isDestroyed()) {
-      entry.view.webContents.destroy();
+    const webContents = entry.view?.webContents;
+    if (typeof webContents?.isDestroyed === 'function' && !webContents.isDestroyed()) {
+      webContents.destroy();
     }
   } catch {
     // Ignore view destruction failures during cleanup.
@@ -128,7 +150,7 @@ function destroyEmbeddedBrowserView(sessionId) {
 }
 
 function ensureEmbeddedBrowserView(sessionState) {
-  if (!WebContentsView || !sessionState || !sessionState.id) {
+  if (!WebContentsView || !sessionState?.id) {
     return null;
   }
 
@@ -138,17 +160,17 @@ function ensureEmbeddedBrowserView(sessionState) {
   }
 
   const partition = String(sessionState.hostPartition || `sentinel-browser-${sessionState.id}`);
-  const isolatedSession = electronSession && typeof electronSession.fromPartition === 'function'
+  const isolatedSession = typeof electronSession?.fromPartition === 'function'
     ? electronSession.fromPartition(partition)
     : null;
 
-  if (isolatedSession && typeof isolatedSession.setPermissionRequestHandler === 'function') {
+  if (typeof isolatedSession?.setPermissionRequestHandler === 'function') {
     isolatedSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
       callback(false);
     });
   }
 
-  if (isolatedSession && isolatedSession.webRequest && typeof isolatedSession.webRequest.onBeforeSendHeaders === 'function') {
+  if (typeof isolatedSession?.webRequest?.onBeforeSendHeaders === 'function') {
     isolatedSession.webRequest.onBeforeSendHeaders((details, callback) => {
       const nextHeaders = { ...(details.requestHeaders || {}) };
       nextHeaders['X-Sentinel-Embedded-Browser'] = '1';
@@ -161,7 +183,7 @@ function ensureEmbeddedBrowserView(sessionState) {
   // inherit the system trust store, so we perform an explicit forge chain verification.
   // Certs that did not originate from Sentinel are rejected (ERR_FAILED / -2) to prevent
   // silent trust elevation if traffic somehow escapes the proxy.
-  if (isolatedSession && typeof isolatedSession.setCertificateVerifyProc === 'function') {
+  if (typeof isolatedSession?.setCertificateVerifyProc === 'function') {
     isolatedSession.setCertificateVerifyProc((request, callback) => {
       if (_verifyLeafAgainstSentinelCa(request)) {
         callback(0);
@@ -170,7 +192,7 @@ function ensureEmbeddedBrowserView(sessionState) {
           'warn',
           'browser',
           'TLS cert rejected — failed Sentinel CA verification',
-          `host: ${String(request && request.hostname || 'unknown')}`,
+          `host: ${String(request?.hostname ?? 'unknown')}`,
         );
         callback(-2);
       }
@@ -207,7 +229,7 @@ function ensureEmbeddedBrowserView(sessionState) {
     Promise.resolve(protocolSupport.getStatus())
       .then(status => embeddedBrowserService.completeRuntimeNavigation({
         sessionId: sessionState.id,
-        proxyPort: status && status.running ? status.port : 0,
+        proxyPort: status?.running ? status.port : 0,
         currentUrl,
         title,
       }))
@@ -254,20 +276,10 @@ function syncEmbeddedBrowserHost() {
   const targetWindow = _getActiveWindow();
   const listed = embeddedBrowserService.listSessions();
   const sessions = Array.isArray(listed.items) ? listed.items : [];
-  const activeSession = sessions.find(item => item.focused && item.visible && hasVisibleBrowserBounds(item.bounds)) || null;
+  const activeSession = findActiveVisibleSession(sessions);
+  const activeSessionId = activeSession?.id || '';
 
-  for (const [sessionId, entry] of embeddedBrowserViews.entries()) {
-    if (!targetWindow || !activeSession || sessionId !== activeSession.id) {
-      if (entry.attached && targetWindow && targetWindow.contentView) {
-        try {
-          targetWindow.contentView.removeChildView(entry.view);
-        } catch {
-          // Ignore detach failures when re-syncing the Chromium host.
-        }
-      }
-      entry.attached = false;
-    }
-  }
+  detachInactiveEmbeddedBrowserViews(targetWindow, activeSessionId);
 
   if (!targetWindow || !activeSession) {
     activeEmbeddedBrowserSessionId = '';
@@ -279,7 +291,7 @@ function syncEmbeddedBrowserHost() {
     return;
   }
 
-  if (!entry.attached && targetWindow.contentView) {
+  if (!entry.attached && targetWindow?.contentView) {
     targetWindow.contentView.addChildView(entry.view);
     entry.attached = true;
   }
@@ -293,20 +305,22 @@ function syncEmbeddedBrowserHost() {
 
 async function loadEmbeddedBrowserIntoHost(sessionState) {
   const entry = ensureEmbeddedBrowserView(sessionState);
-  if (!entry || !sessionState || !sessionState.currentUrl) {
+  if (!entry || !sessionState?.currentUrl) {
     throw new Error('Chromium host view could not be prepared for navigation');
   }
 
-  const status = await protocolSupport.getStatus();
-  const proxyPort = status && status.running ? status.port : 0;
-  if (proxyPort > 0 && entry.view && entry.view.webContents && entry.view.webContents.session && typeof entry.view.webContents.session.setProxy === 'function') {
-    await entry.view.webContents.session.setProxy({
+  const status = protocolSupport.getStatus();
+  const proxyPort = status?.running ? status.port : 0;
+  const isolatedWebSession = entry.view?.webContents?.session;
+  if (proxyPort > 0 && typeof isolatedWebSession?.setProxy === 'function') {
+    await isolatedWebSession.setProxy({
       proxyRules: `http=127.0.0.1:${proxyPort};https=127.0.0.1:${proxyPort}`,
       proxyBypassRules: '<-loopback>',
     });
   }
 
-  if (entry.view && entry.view.webContents && typeof entry.view.webContents.loadURL === 'function') {
+  const webContents = entry.view?.webContents;
+  if (typeof webContents?.loadURL === 'function') {
     _sendConsoleLog(
       'info',
       'browser',
@@ -314,7 +328,7 @@ async function loadEmbeddedBrowserIntoHost(sessionState) {
       `session: ${sessionState.name || sessionState.id} · url: ${sessionState.currentUrl} · proxyPort: ${proxyPort || 'none'} · partition: ${entry.partition || 'n/a'}`,
     );
     try {
-      await entry.view.webContents.loadURL(sessionState.currentUrl);
+      await webContents.loadURL(sessionState.currentUrl);
       _sendConsoleLog('info', 'browser', 'Chromium loadURL resolved', `session: ${sessionState.name || sessionState.id} · url: ${sessionState.currentUrl}`);
     } catch (error) {
       // Electron may reject loadURL with ERR_ABORTED for normal redirect/cancel flow.
@@ -335,7 +349,7 @@ async function navigateEmbeddedBrowserView(sessionState) {
 
 async function goBackEmbeddedBrowserView(sessionState) {
   const entry = ensureEmbeddedBrowserView(sessionState);
-  if (!entry || !entry.view || !entry.view.webContents) {
+  if (!entry?.view?.webContents) {
     return null;
   }
 
@@ -350,7 +364,7 @@ async function goBackEmbeddedBrowserView(sessionState) {
 
 async function goForwardEmbeddedBrowserView(sessionState) {
   const entry = ensureEmbeddedBrowserView(sessionState);
-  if (!entry || !entry.view || !entry.view.webContents) {
+  if (!entry?.view?.webContents) {
     return null;
   }
 
@@ -365,7 +379,7 @@ async function goForwardEmbeddedBrowserView(sessionState) {
 
 async function reloadEmbeddedBrowserView(sessionState) {
   const entry = ensureEmbeddedBrowserView(sessionState);
-  if (!entry || !entry.view || !entry.view.webContents) {
+  if (!entry?.view?.webContents) {
     return null;
   }
 
@@ -483,7 +497,7 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
       embeddedBrowserService.failRuntimeNavigation({
         sessionId: result.session.id,
         url: result.session.currentUrl,
-        error: new Error(error && error.message ? error.message : 'Chromium host navigation failed.'),
+        error: new Error(error?.message || 'Chromium host navigation failed.'),
       });
     }
     syncEmbeddedBrowserHost();
@@ -492,7 +506,7 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
 
   ipcMain.handle('browser:back', async (_event, args = {}) => {
     const result = await embeddedBrowserService.back(args);
-    if (result && result.session && !result.skipped) {
+    if (result?.session && !result.skipped) {
       try {
         await goBackEmbeddedBrowserView(result.session);
       } catch {
@@ -505,7 +519,7 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
 
   ipcMain.handle('browser:forward', async (_event, args = {}) => {
     const result = await embeddedBrowserService.forward(args);
-    if (result && result.session && !result.skipped) {
+    if (result?.session && !result.skipped) {
       try {
         await goForwardEmbeddedBrowserView(result.session);
       } catch {
@@ -518,7 +532,7 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
 
   ipcMain.handle('browser:reload', async (_event, args = {}) => {
     const result = await embeddedBrowserService.reload(args);
-    if (result && result.session && !result.skipped) {
+    if (result?.session && !result.skipped) {
       try {
         await reloadEmbeddedBrowserView(result.session);
       } catch {
@@ -532,8 +546,9 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
   ipcMain.handle('browser:stop', async (_event, args = {}) => {
     const result = embeddedBrowserService.stop(args);
     const entry = embeddedBrowserViews.get(args.sessionId);
-    if (entry && entry.view && entry.view.webContents && typeof entry.view.webContents.stop === 'function') {
-      entry.view.webContents.stop();
+    const webContents = entry?.view?.webContents;
+    if (typeof webContents?.stop === 'function') {
+      webContents.stop();
     }
     return result;
   });
@@ -546,7 +561,7 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
 
   embeddedBrowserService.on('navigate:start', payload => {
     sendToRenderer('browser:navigate:start', payload);
-    const session = payload && payload.session ? payload.session : null;
+    const session = payload?.session || null;
     if (session) {
       sendConsoleLog('info', 'browser', `Navigating → ${session.currentUrl || '...'}`, `session: ${session.name || session.id}`);
     }
@@ -554,15 +569,15 @@ function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sen
 
   embeddedBrowserService.on('navigate:complete', payload => {
     sendToRenderer('browser:navigate:complete', payload);
-    const session = payload && payload.session ? payload.session : null;
+    const session = payload?.session || null;
     if (session) {
-      sendConsoleLog('info', 'browser', `Loaded ${session.currentUrl || ''}`, `status: ${session.statusCode || 'n/a'} · proxy port: ${payload && payload.proxy ? payload.proxy.port : 'n/a'}`);
+      sendConsoleLog('info', 'browser', `Loaded ${session.currentUrl || ''}`, `status: ${session.statusCode || 'n/a'} · proxy port: ${payload?.proxy?.port ?? 'n/a'}`);
     }
   });
 
   embeddedBrowserService.on('navigate:error', payload => {
     sendToRenderer('browser:navigate:error', payload);
-    sendConsoleLog('error', 'browser', `Navigation failed: ${payload && payload.url ? payload.url : ''}`, payload && payload.error ? String(payload.error) : undefined);
+    sendConsoleLog('error', 'browser', `Navigation failed: ${payload?.url || ''}`, payload?.error ? String(payload.error) : undefined);
   });
 
   embeddedBrowserService.on('title:updated', payload => {
