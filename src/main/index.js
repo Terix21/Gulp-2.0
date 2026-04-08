@@ -493,7 +493,6 @@ function createWindow () {
     }
   });
 
-  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
     sendConsoleLog(
       'error',
@@ -504,10 +503,12 @@ function createWindow () {
   });
   mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     let severity = 'info';
-    if (level >= 2) {
-      severity = 'error';
-    } else if (level === 1) {
+    if (level === 1) {
       severity = 'warn';
+    } else if (level === 2) {
+      severity = 'error';
+    } else if (level === 3) {
+      severity = 'debug';
     }
 
     sendConsoleLog(
@@ -520,6 +521,7 @@ function createWindow () {
   mainWindow.webContents.once('did-finish-load', () => {
     sendConsoleLog('info', 'app', 'Sentinel workspace loaded', `Electron ${process.versions.electron || 'unknown'} · Node ${process.versions.node || 'unknown'}`);
   });
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.on('resize', () => {
     if (browserHooks) browserHooks.syncHost();
   });
