@@ -169,7 +169,7 @@ function ensureEmbeddedBrowserView(sessionState) {
         _sendConsoleLog(
           'warn',
           'browser',
-          'TLS cert rejected — not issued by Sentinel CA',
+          'TLS cert rejected — failed Sentinel CA verification',
           `host: ${String(request && request.hostname || 'unknown')}`,
         );
         callback(-2);
