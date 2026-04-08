@@ -43,7 +43,7 @@ module.exports = defineConfig({
           dest: '../contracts',
         },
         {
-          src: path.resolve(__dirname, 'END_USER_GUIDE.md'),
+          src: path.resolve(__dirname, 'instructions', 'END_USER_GUIDE.md'),
           dest: '..',
         },
       ],
