@@ -1,6 +1,7 @@
 'use strict';
 
 const { WebContentsView, session: electronSession } = require('electron');
+const forge = require('node-forge');
 const embeddedBrowserService = require('./embedded-browser-service');
 const protocolSupport = require('./protocol-support');
 
@@ -16,10 +17,48 @@ let activeEmbeddedBrowserSessionId = '';
 let _sendConsoleLog;
 let _sendToRenderer;
 let _getActiveWindow;
+let _caManager;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+// Cryptographically verifies that the TLS certificate presented by the remote
+// server was issued and signed by the Sentinel CA. Returns true only when
+// forge can successfully verify the cert chain against the in-memory CA cert.
+// Any cert that fails (not issued by Sentinel, expired, or tampered) is rejected
+// so that traffic which escapes the proxy does not get a free trust elevation.
+function _verifyLeafAgainstSentinelCa(request) {
+  if (!_caManager || typeof _caManager.getCaCertificatePem !== 'function') {
+    return false;
+  }
+
+  const certPem = request && request.certificate && request.certificate.data;
+  if (!certPem || typeof certPem !== 'string') {
+    return false;
+  }
+
+  let caCertPem;
+  try {
+    caCertPem = _caManager.getCaCertificatePem();
+  } catch {
+    return false;
+  }
+
+  if (!caCertPem) {
+    return false;
+  }
+
+  try {
+    const caCert = forge.pki.certificateFromPem(caCertPem);
+    const leafCert = forge.pki.certificateFromPem(certPem);
+    const caStore = forge.pki.createCaStore([caCert]);
+    forge.pki.verifyCertificateChain(caStore, [leafCert]);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function hasVisibleBrowserBounds(bounds = {}) {
   return Number(bounds.width) > 0 && Number(bounds.height) > 0;
@@ -117,12 +156,24 @@ function ensureEmbeddedBrowserView(sessionState) {
     });
   }
 
-  // Trust all TLS certs in this isolated session — all traffic routes through the Sentinel
-  // MITM proxy which presents its own CA-signed certs. Isolated partitions don't inherit
-  // the system trust store, so cert verification is delegated to proxy routing intent.
+  // Only trust TLS certificates issued by the Sentinel CA. All HTTPS traffic routes through
+  // the MITM proxy which presents leaf certs signed by our CA. Isolated partitions don't
+  // inherit the system trust store, so we perform an explicit forge chain verification.
+  // Certs that did not originate from Sentinel are rejected (ERR_FAILED / -2) to prevent
+  // silent trust elevation if traffic somehow escapes the proxy.
   if (isolatedSession && typeof isolatedSession.setCertificateVerifyProc === 'function') {
-    isolatedSession.setCertificateVerifyProc((_request, callback) => {
-      callback(0);
+    isolatedSession.setCertificateVerifyProc((request, callback) => {
+      if (_verifyLeafAgainstSentinelCa(request)) {
+        callback(0);
+      } else {
+        _sendConsoleLog(
+          'warn',
+          'browser',
+          'TLS cert rejected — failed Sentinel CA verification',
+          `host: ${String(request && request.hostname || 'unknown')}`,
+        );
+        callback(-2);
+      }
     });
   }
 
@@ -336,13 +387,14 @@ async function reloadEmbeddedBrowserView(sessionState) {
  * Must be called once during app.whenReady().
  *
  * @param {Electron.IpcMain} ipcMain
- * @param {{ getActiveWindow: Function, sendConsoleLog: Function, sendToRenderer: Function }} deps
+ * @param {{ getActiveWindow: Function, sendConsoleLog: Function, sendToRenderer: Function, caManager: object }} deps - `caManager` is required for Sentinel CA TLS verification; omitting it disables chain verification.
  * @returns {{ syncHost: Function, destroyAllViews: Function }}
  */
-function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sendToRenderer }) {
+function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sendToRenderer, caManager }) {
   _getActiveWindow = getActiveWindow;
   _sendConsoleLog = sendConsoleLog;
   _sendToRenderer = sendToRenderer;
+  _caManager = caManager || null;
 
   // Wire the proxy status/start adapters so the browser service can auto-start
   // the proxy and route traffic through it when opening a session.
