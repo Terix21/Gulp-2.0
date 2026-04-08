@@ -31,6 +31,8 @@ const processOutputBuffers = {
   stdout: '',
   stderr: '',
 };
+const NATIVE_REBUILD_MARKER_PATH = path.join(__dirname, '..', '..', 'node_modules', '.cache', 'sentinel', 'electron-rebuild.json');
+const PACKAGE_LOCK_PATH = path.join(__dirname, '..', '..', 'package-lock.json');
 let processOutputStreamingInstalled = false;
 let runtimeLogHooksInstalled = false;
 let consoleLogSequence = 0;
@@ -196,6 +198,39 @@ function installRuntimeLogHooks() {
   app.on('child-process-gone', (_event, details) => {
     sendConsoleLog('error', 'app', 'Child process gone', stringifyLogValue(details));
   });
+}
+
+async function warnIfNativeModulesNeedRebuild() {
+  if (app.isPackaged) {
+    return;
+  }
+
+  let marker = null;
+  try {
+    marker = JSON.parse(await fs.readFile(NATIVE_REBUILD_MARKER_PATH, 'utf8'));
+  } catch {
+    sendConsoleLog(
+      'warn',
+      'app',
+      'Native modules may not be rebuilt for this install',
+      'Run npm run rebuild:native before launching Electron if sqlite3 or other native bindings fail to load.',
+    );
+    return;
+  }
+
+  try {
+    const packageLockStat = await fs.stat(PACKAGE_LOCK_PATH);
+    if (Number(marker.packageLockMtimeMs) < packageLockStat.mtimeMs) {
+      sendConsoleLog(
+        'warn',
+        'app',
+        'Native rebuild marker is stale',
+        'Dependencies changed after the last electron-rebuild. Run npm run rebuild:native before launching Electron.',
+      );
+    }
+  } catch {
+    // Ignore package-lock checks when the lockfile is unavailable.
+  }
 }
 
 /**
@@ -488,6 +523,9 @@ app.whenReady().then(() => {
   installProcessOutputStreaming();
   installRuntimeLogHooks();
   registerConsoleHandlers();
+  warnIfNativeModulesNeedRebuild().catch(() => {
+    // Ignore preflight warning failures; startup should continue.
+  });
 
   extensionHost.configure({
     extensionsDir: path.join(app.getPath('userData'), 'extensions'),
