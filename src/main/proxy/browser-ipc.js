@@ -387,7 +387,7 @@ async function reloadEmbeddedBrowserView(sessionState) {
  * Must be called once during app.whenReady().
  *
  * @param {Electron.IpcMain} ipcMain
- * @param {{ getActiveWindow: Function, sendConsoleLog: Function, sendToRenderer: Function }} deps
+ * @param {{ getActiveWindow: Function, sendConsoleLog: Function, sendToRenderer: Function, caManager: object }} deps - `caManager` is required for Sentinel CA TLS verification; omitting it disables chain verification.
  * @returns {{ syncHost: Function, destroyAllViews: Function }}
  */
 function registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sendToRenderer, caManager }) {
