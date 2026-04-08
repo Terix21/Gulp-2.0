@@ -3,6 +3,7 @@ const { createRoot } = require('react-dom/client');
 const { ChakraProvider, defaultSystem } = require('@chakra-ui/react');
 const App = require('./components/App');
 const themeSystem = require('./theme');
+require('../scss/style.scss');
 
 const rootElement = document.getElementById('root');
 
