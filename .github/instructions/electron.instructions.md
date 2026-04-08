@@ -23,4 +23,5 @@ electron
 - 2026-04-02: For high-throughput proxy/scanner events, keep capture and analysis in main process services and stream compact progress/result events to renderer via preload subscriptions.
 - 2026-04-02: Prefer event-driven channels (`ipcMain` + `webContents.send` / `ipcRenderer.on`) over tight polling loops for live logs.
 - 2026-04-02: Renderer update cadence should be buffered/throttled at 100-200ms to prevent UI lockups under burst traffic.
+- 2026-04-02: Keep IPC payloads bounded; send identifiers, slices, summaries, or incremental deltas instead of full in-memory datasets.
 - 2026-04-07: IPC handlers extracted from `index.js` into `src/main/proxy/proxy-ipc.js` and `src/main/proxy/browser-ipc.js`. Each exports a `register*Handlers(ipcMain, deps)` function. `browser-ipc.js` owns embedded browser view state and returns `{ syncHost, destroyAllViews }` lifecycle hooks. `index.js` is the composition root — it constructs deps and calls each register function during `app.whenReady()`.
