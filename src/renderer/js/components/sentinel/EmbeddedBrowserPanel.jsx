@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
   Badge,
   Box,
   Button,
@@ -8,8 +8,8 @@ const {
   HStack,
   Input,
   Text,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 function mergeSession(currentItems, nextSession) {
   if (!nextSession || !nextSession.id) {
@@ -438,4 +438,4 @@ function EmbeddedBrowserPanel({ themeId }) {
   );
 }
 
-module.exports = EmbeddedBrowserPanel;
+export default EmbeddedBrowserPanel;

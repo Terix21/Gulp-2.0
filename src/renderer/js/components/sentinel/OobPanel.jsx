@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
   Badge,
   Box,
   Button,
@@ -9,8 +9,8 @@ const {
   Input,
   Text,
   VStack,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 const LOOPBACK_PATTERN = /^https?:\/\/(127\.\d+\.\d+\.\d+|::1|\[::1\]|localhost)(:\d+)?\//i;
 
@@ -171,4 +171,4 @@ function OobPanel({ themeId }) {
   );
 }
 
-module.exports = OobPanel;
+export default OobPanel;

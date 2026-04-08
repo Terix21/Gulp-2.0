@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
   Badge,
   Box,
   Button,
@@ -12,8 +12,8 @@ const {
   Text,
   Textarea,
   VStack
-} = require('@chakra-ui/react');
-const {
+} from '@chakra-ui/react';
+import {
   FiHome,
   FiShield,
   FiClock,
@@ -34,20 +34,20 @@ const {
   FiChevronUp,
   FiTrash2,
   FiSettings,
-} = require('react-icons/fi');
-const DashboardShell = require('./sentinel/DashboardShell');
-const ProxyPanel = require('./sentinel/ProxyPanel');
-const HistoryPanel = require('./sentinel/HistoryPanel');
-const RepeaterPanel = require('./sentinel/RepeaterPanel');
-const IntruderPanel = require('./sentinel/IntruderPanel');
-const TargetMapPanel = require('./sentinel/TargetMapPanel');
-const ScannerPanel = require('./sentinel/ScannerPanel');
-const OobPanel = require('./sentinel/OobPanel');
-const SequencerPanel = require('./sentinel/SequencerPanel');
-const DecoderPanel = require('./sentinel/DecoderPanel');
-const EmbeddedBrowserPanel = require('./sentinel/EmbeddedBrowserPanel');
-const ExtensionsPanel = require('./sentinel/ExtensionsPanel');
-const { modules, moduleDescriptions } = require('./app-constants');
+} from 'react-icons/fi';
+import DashboardShell from './sentinel/DashboardShell';
+import ProxyPanel from './sentinel/ProxyPanel';
+import HistoryPanel from './sentinel/HistoryPanel';
+import RepeaterPanel from './sentinel/RepeaterPanel';
+import IntruderPanel from './sentinel/IntruderPanel';
+import TargetMapPanel from './sentinel/TargetMapPanel';
+import ScannerPanel from './sentinel/ScannerPanel';
+import OobPanel from './sentinel/OobPanel';
+import SequencerPanel from './sentinel/SequencerPanel';
+import DecoderPanel from './sentinel/DecoderPanel';
+import EmbeddedBrowserPanel from './sentinel/EmbeddedBrowserPanel';
+import ExtensionsPanel from './sentinel/ExtensionsPanel';
+import { modules, moduleDescriptions } from './app-constants';
 
 const panelStatusFields = {
   Dashboard: [
@@ -1386,4 +1386,4 @@ function App() {
   );
 }
 
-module.exports = App;
+export default App;

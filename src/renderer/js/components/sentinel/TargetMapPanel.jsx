@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
   Badge,
   Box,
   Button,
@@ -9,8 +9,8 @@ const {
   Input,
   Text,
   VStack,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 function flattenTree(nodes = [], depth = 0, rows = []) {
   for (const node of nodes) {
@@ -362,4 +362,4 @@ function TargetMapPanel({ themeId }) {
   );
 }
 
-module.exports = TargetMapPanel;
+export default TargetMapPanel;

@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
   Box,
   Button,
   Code,
@@ -11,8 +11,8 @@ const {
   Text,
   Textarea,
   VStack,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 function splitCsvList(value) {
   return String(value || '')
@@ -278,4 +278,4 @@ function ExtensionsPanel({ themeId }) {
   );
 }
 
-module.exports = ExtensionsPanel;
+export default ExtensionsPanel;

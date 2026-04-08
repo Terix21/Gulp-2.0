@@ -23,3 +23,4 @@ vite
 
 ## Append-Only Updates
 - 2026-04-07: Adopted as primary build system after Gulp removal.
+- 2026-04-08: Renderer source files (src/renderer/js/**) must be native ESM (import/export). Vite production builds do not transform CJS require() from source files; any CJS present in renderer output will cause 'require is not defined' at runtime. Use scripts/cjs-to-esm.js to convert when needed.

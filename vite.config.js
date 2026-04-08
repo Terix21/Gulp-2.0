@@ -7,6 +7,7 @@ const staticCopyPlugin = require('vite-plugin-static-copy');
 const electron = electronSimple.default || electronSimple;
 const react = reactPlugin.default || reactPlugin;
 const viteStaticCopy = staticCopyPlugin.viteStaticCopy || staticCopyPlugin.default || staticCopyPlugin;
+const toPosixPath = (value) => value.replaceAll('\\', '/');
 
 module.exports = defineConfig({
   root: path.resolve(__dirname, 'src', 'renderer'),
@@ -39,11 +40,23 @@ module.exports = defineConfig({
     viteStaticCopy({
       targets: [
         {
-          src: path.resolve(__dirname, 'src', 'contracts', '*'),
+          src: toPosixPath(path.resolve(__dirname, 'src', 'contracts', '**/*')),
           dest: '../contracts',
         },
         {
-          src: path.resolve(__dirname, 'instructions', 'END_USER_GUIDE.md'),
+          src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'certs', '**/*')),
+          dest: '../main/certs',
+        },
+        {
+          src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'db', '**/*')),
+          dest: '../main/db',
+        },
+        {
+          src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'proxy', '**/*')),
+          dest: '../main/proxy',
+        },
+        {
+          src: toPosixPath(path.resolve(__dirname, 'instructions', 'END_USER_GUIDE.md')),
           dest: '..',
         },
       ],

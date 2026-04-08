@@ -1,5 +1,5 @@
-const React = require('react');
-const { Box, Button, Code, Flex, Grid, Heading, Text, VStack } = require('@chakra-ui/react');
+import React from 'react';
+import { Box, Button, Code, Flex, Grid, Heading, Text, VStack } from '@chakra-ui/react';
 
 // Reusable metric card widget for the 3-column dashboard grid.
 function MetricWidget({ title, metrics }) {
@@ -178,4 +178,4 @@ function DashboardShell() {
 	);
 }
 
-module.exports = DashboardShell;
+export default DashboardShell;

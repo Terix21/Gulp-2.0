@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
 	Box,
 	Button,
 	Code,
@@ -9,11 +9,11 @@ const {
 	Separator,
 	Text,
 	VStack,
-} = require('@chakra-ui/react');
-const MonacoEditor = require('@monaco-editor/react').default;
-const { FixedSizeList } = require('react-window');
-const { createColumnHelper, flexRender, getCoreRowModel, useReactTable } = require('@tanstack/react-table');
-const { getMonacoTheme, getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import MonacoEditor from '@monaco-editor/react';
+import { FixedSizeList } from 'react-window';
+import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+import { getMonacoTheme, getStatusTextColor } from './theme-utils';
 
 const columnHelper = createColumnHelper();
 const ROW_HEIGHT = 34;
@@ -613,4 +613,4 @@ function HistoryPanel({ themeId }) {
 	);
 }
 
-module.exports = HistoryPanel;
+export default HistoryPanel;
