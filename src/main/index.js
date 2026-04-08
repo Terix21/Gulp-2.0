@@ -507,7 +507,7 @@ app.whenReady().then(() => {
   registerCaHandlers();
   registerProjectHandlers();
   registerExtensionHandlers();
-  browserHooks = registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sendToRenderer });
+  browserHooks = registerBrowserHandlers(ipcMain, { getActiveWindow, sendConsoleLog, sendToRenderer, caManager });
   registerProxyHandlers(ipcMain, {
     protocolSupport,
     interceptEngine,
