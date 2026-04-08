@@ -6,9 +6,11 @@
   "scripts": {
     "clean": "gulp clean",
     "build": "npm run build:metadata && gulp build",
+    "postinstall": "node scripts/native/maybe-rebuild.js",
+    "rebuild:native": "electron-rebuild",
     "build:metadata": "node scripts/versioning/write-build-metadata.js",
-    "pack:win": "npm run build && electron-builder --win --dir",
-    "installer:win": "npm run build && electron-builder --win nsis",
+    "pack:win": "npm run rebuild:native && npm run build && electron-builder --win --dir",
+    "installer:win": "npm run rebuild:native && npm run build && electron-builder --win nsis",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
@@ -20,6 +22,9 @@
   "author": "Trogon4081",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",
     "@babel/preset-react": "^7.28.5",
@@ -29,6 +34,7 @@
     "@vitest/ui": "^4.1.2",
     "cross-env": "^10.1.0",
     "electron": "^41.1.0",
+    "@electron/rebuild": "^4.0.1",
     "electron-builder": "^26.8.1",
     "esbuild": "^0.25.4",
     "gulp": "^5.0.1",
