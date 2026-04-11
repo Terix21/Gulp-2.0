@@ -8,6 +8,7 @@ import {
   HStack,
   Input,
   Text,
+  Select,
   Textarea,
   VStack,
 } from '@chakra-ui/react';
@@ -462,68 +463,83 @@ function IntruderPanel({ themeId }) {
           <Box flex='1' minW='320px'>
             <VStack align='stretch' spacing={3}>
               <HStack wrap='wrap'>
-                <Input value={method} onChange={event => setMethod(event.target.value.toUpperCase())} maxW='100px' fontFamily='mono' size='sm' />
-                <Input ref={urlRef} value={url} onChange={event => setUrl(event.target.value)} placeholder='https://target/path?x=§payload§' fontFamily='mono' size='sm' />
+                <Input value={method} onChange={event => setMethod(event.target.value.toUpperCase())} maxW='100px' fontFamily='mono' size='sm' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                <Input ref={urlRef} value={url} onChange={event => setUrl(event.target.value)} placeholder='https://target/path?x=§payload§' fontFamily='mono' size='sm' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                 <Button size='xs' variant='outline' onClick={() => insertMarker(urlRef, url, setUrl, 'payload')}>Mark URL</Button>
               </HStack>
 
-              <Textarea ref={headersRef} value={headersText} onChange={event => setHeadersText(event.target.value)} rows={4} fontFamily='mono' fontSize='xs' placeholder='host: example.com' />
+              <Textarea ref={headersRef} value={headersText} onChange={event => setHeadersText(event.target.value)} rows={4} fontFamily='mono' fontSize='xs' placeholder='host: example.com' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
               <HStack justify='space-between' wrap='wrap'>
-                <Text fontSize='xs' color='fg.muted'>Header values can also contain <Code>§markers§</Code>.</Text>
+                <Text fontSize='xs' color='fg.muted'>Header values can also contain <Code color='fg.default' bg='bg.subtle'>§markers§</Code>.</Text>
                 <Button size='xs' variant='outline' onClick={() => insertMarker(headersRef, headersText, setHeadersText, 'header-value')}>Mark Headers</Button>
               </HStack>
 
-              <Textarea ref={bodyRef} value={body} onChange={event => setBody(event.target.value)} rows={6} fontFamily='mono' fontSize='xs' placeholder='Request body with §payload§ markers' />
+              <Textarea ref={bodyRef} value={body} onChange={event => setBody(event.target.value)} rows={6} fontFamily='mono' fontSize='xs' placeholder='Request body with §payload§ markers' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
               <HStack justify='space-between' wrap='wrap'>
-                <Text fontSize='xs' color='fg.muted'>Detected positions: <Code>{markers.length}</Code> · Estimated requests: <Code>{String(estimatedTotal)}</Code></Text>
+                <Text fontSize='xs' color='fg.muted'>Detected positions: <Code color='fg.default' bg='bg.subtle'>{markers.length}</Code> · Estimated requests: <Code color='fg.default' bg='bg.subtle'>{String(estimatedTotal)}</Code></Text>
                 <Button size='xs' variant='outline' onClick={() => insertMarker(bodyRef, body, setBody, 'payload')}>Mark Body</Button>
               </HStack>
 
               <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
                 <Text fontWeight='semibold' fontSize='sm' mb={2}>Attack Profile</Text>
-                <select value={attackType} onChange={event => setAttackType(event.target.value)} style={{ width: '100%', padding: '6px 8px', fontSize: '12px' }}>
+                <Select
+                  size='xs'
+                  value={attackType}
+                  onChange={event => setAttackType(event.target.value)}
+                  color='fg.default'
+                  bg='bg.surface'
+                  borderColor='border.default'
+                >
                   <option value='sniper'>Single-point / Sniper</option>
                   <option value='pitchfork'>Pitchfork</option>
                   <option value='cluster-bomb'>Cluster Bomb</option>
-                </select>
+                </Select>
               </Box>
 
               <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
                 <Text fontWeight='semibold' fontSize='sm' mb={2}>Payload Sources</Text>
                 <VStack align='stretch' spacing={3}>
-                  {positionSources.length === 0 ? <Text fontSize='xs' color='fg.muted'>Add at least one <Code>§marker§</Code> in URL, headers, or body.</Text> : null}
+                {positionSources.length === 0 ? <Text fontSize='xs' color='fg.muted'>Add at least one <Code color='fg.default' bg='bg.subtle'>§marker§</Code> in URL, headers, or body.</Text> : null}
                   {positionSources.map((entry, index) => {
                     const source = entry.source;
                     return (
                       <Box key={entry.marker.id} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2}>
-                        <Text fontSize='xs' fontWeight='semibold' mb={2}>{entry.marker.label} · default <Code>{entry.marker.defaultValue}</Code></Text>
-                        <select value={source.type} onChange={event => updatePositionSource(index, { type: event.target.value })} style={{ width: '100%', padding: '6px 8px', fontSize: '12px', marginBottom: '8px' }}>
+                      <Text fontSize='xs' fontWeight='semibold' mb={2}>{entry.marker.label} · default <Code color='fg.default' bg='bg.subtle'>{entry.marker.defaultValue}</Code></Text>
+                        <Select
+                          size='xs'
+                          value={source.type}
+                          onChange={event => updatePositionSource(index, { type: event.target.value })}
+                          mb={2}
+                          color='fg.default'
+                          bg='bg.surface'
+                          borderColor='border.default'
+                        >
                           <option value='dictionary'>Dictionary</option>
                           <option value='bruteforce'>Brute-force charset</option>
                           <option value='sequential'>Sequential numeric</option>
-                        </select>
+                        </Select>
 
                         {source.type === 'dictionary' ? (
                           <VStack align='stretch' spacing={2}>
-                            <Input size='xs' placeholder='Optional dictionary file path' value={source.filePath || ''} onChange={event => updatePositionSource(index, { filePath: event.target.value })} />
-                            <Textarea size='xs' rows={4} placeholder='Or inline payloads, one per line' value={source.text || ''} onChange={event => updatePositionSource(index, { text: event.target.value })} fontFamily='mono' fontSize='xs' />
+                            <Input size='xs' placeholder='Optional dictionary file path' value={source.filePath || ''} onChange={event => updatePositionSource(index, { filePath: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Textarea size='xs' rows={4} placeholder='Or inline payloads, one per line' value={source.text || ''} onChange={event => updatePositionSource(index, { text: event.target.value })} fontFamily='mono' fontSize='xs' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </VStack>
                         ) : null}
 
                         {source.type === 'bruteforce' ? (
                           <HStack wrap='wrap'>
-                            <Input size='xs' maxW='160px' placeholder='Charset' value={source.charset || ''} onChange={event => updatePositionSource(index, { charset: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Min' value={source.minLength} onChange={event => updatePositionSource(index, { minLength: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Max' value={source.maxLength} onChange={event => updatePositionSource(index, { maxLength: event.target.value })} />
+                            <Input size='xs' maxW='160px' placeholder='Charset' value={source.charset || ''} onChange={event => updatePositionSource(index, { charset: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' maxW='100px' type='number' placeholder='Min' value={source.minLength} onChange={event => updatePositionSource(index, { minLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' maxW='100px' type='number' placeholder='Max' value={source.maxLength} onChange={event => updatePositionSource(index, { maxLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </HStack>
                         ) : null}
 
                         {source.type === 'sequential' ? (
                           <HStack wrap='wrap'>
-                            <Input size='xs' maxW='100px' type='number' placeholder='Start' value={source.start} onChange={event => updatePositionSource(index, { start: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='End' value={source.end} onChange={event => updatePositionSource(index, { end: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Step' value={source.step} onChange={event => updatePositionSource(index, { step: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Pad' value={source.padTo} onChange={event => updatePositionSource(index, { padTo: event.target.value })} />
+                            <Input size='xs' maxW='100px' type='number' placeholder='Start' value={source.start} onChange={event => updatePositionSource(index, { start: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' maxW='100px' type='number' placeholder='End' value={source.end} onChange={event => updatePositionSource(index, { end: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' maxW='100px' type='number' placeholder='Step' value={source.step} onChange={event => updatePositionSource(index, { step: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' maxW='100px' type='number' placeholder='Pad' value={source.padTo} onChange={event => updatePositionSource(index, { padTo: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </HStack>
                         ) : null}
                       </Box>
@@ -533,7 +549,7 @@ function IntruderPanel({ themeId }) {
               </Box>
 
               <HStack justify='space-between' wrap='wrap'>
-                <Text fontSize='xs' color='fg.muted'>Selected attack: <Code>{selectedAttack ? selectedAttack.requestSummary : 'none'}</Code></Text>
+                <Text fontSize='xs' color='fg.muted'>Selected attack: <Code color='fg.default' bg='bg.subtle'>{selectedAttack ? selectedAttack.requestSummary : 'none'}</Code></Text>
                 <Button size='sm' colorPalette='red' onClick={startAttack}>Start Attack</Button>
               </HStack>
 
@@ -541,59 +557,66 @@ function IntruderPanel({ themeId }) {
                 <HStack justify='space-between' wrap='wrap' mb={2}>
                   <Text fontWeight='semibold' fontSize='sm'>Live Results</Text>
                   <HStack>
-                    <Badge colorPalette={progress.status === 'completed' ? 'green' : progress.status === 'stopped' ? 'orange' : 'blue'}>{progress.status}</Badge>
+                <Badge 
+                  variant='outline' 
+                  color='var(--sentinel-fg-default)' 
+                  borderColor={progress.status === 'completed' ? 'green.500' : progress.status === 'stopped' ? 'orange.500' : 'blue.500'} 
+                  bg={progress.status === 'completed' ? 'rgba(34,197,94,0.1)' : progress.status === 'stopped' ? 'rgba(249,115,22,0.1)' : 'rgba(59,130,246,0.1)'}
+                >
+                  {progress.status}
+                </Badge>
                     <Text fontSize='xs' color='fg.muted'>{progress.sent} / {progress.total || (selectedAttack ? selectedAttack.total : 0)} sent</Text>
                   </HStack>
                 </HStack>
 
                 <HStack wrap='wrap' mb={2}>
-                  <Input size='xs' maxW='120px' placeholder='Status' value={filters.statusCode} onChange={event => setFilters(prev => ({ ...prev, statusCode: event.target.value }))} />
-                  <Input size='xs' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} />
-                  <Input size='xs' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} />
+                  <Input size='xs' maxW='120px' placeholder='Status' value={filters.statusCode} onChange={event => setFilters(prev => ({ ...prev, statusCode: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Button size='xs' variant={filters.anomaliesOnly ? 'solid' : 'outline'} onClick={() => setFilters(prev => ({ ...prev, anomaliesOnly: !prev.anomaliesOnly }))}>Anomalies Only</Button>
-                  <select value={sortBy} onChange={event => setSortBy(event.target.value)} style={{ padding: '6px 8px', fontSize: '12px' }}>
+                  <Select size='xs' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default'>
                     <option value='duration'>Sort by Duration</option>
                     <option value='statusCode'>Sort by Status</option>
                     <option value='length'>Sort by Length</option>
-                  </select>
-                  <select value={sortDirection} onChange={event => setSortDirection(event.target.value)} style={{ padding: '6px 8px', fontSize: '12px' }}>
+                  </Select>
+                  <Select size='xs' value={sortDirection} onChange={event => setSortDirection(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default'>
                     <option value='desc'>Desc</option>
                     <option value='asc'>Asc</option>
-                  </select>
+                  </Select>
                 </HStack>
 
                 {loadingResults ? <Text fontSize='xs' color='fg.muted'>Loading results...</Text> : null}
                 {!loadingResults && filteredResults.length === 0 ? <Text fontSize='xs' color='fg.muted'>No results for the selected attack.</Text> : null}
                 {filteredResults.length > 0 ? (
                   <Box overflowX='auto'>
-                    <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Payload</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Status</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Length</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Time</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Anomaly</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Box as='table' w='100%' fontSize='xs' css={{ borderCollapse: 'collapse' }}>
+                      <Box as='thead'>
+                        <Box as='tr'>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Payload</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Status</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Length</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Time</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Anomaly</Box>
+                        </Box>
+                      </Box>
+                      <Box as='tbody'>
                         {filteredResults.map(result => (
-                          <tr key={result.id} style={{ borderTop: '1px solid var(--sentinel-border-default, #2a3948)' }}>
-                            <td style={{ padding: '6px', fontFamily: 'monospace' }}>{result.payload}</td>
-                            <td style={{ padding: '6px' }}><Code>{result.statusCode}</Code></td>
-                            <td style={{ padding: '6px' }}>{result.length}</td>
-                            <td style={{ padding: '6px' }}>{result.duration}ms</td>
-                            <td style={{ padding: '6px' }}>
+                          <Box as='tr' key={result.id} borderTopWidth='1px' borderColor='border.default'>
+                            <Box as='td' p={1.5} fontFamily='mono'>{result.payload}</Box>
+                            <Box as='td' p={1.5}><Code color='fg.default' bg='bg.subtle'>{result.statusCode}</Code></Box>
+                            <Box as='td' p={1.5}>{result.length}</Box>
+                            <Box as='td' p={1.5}>{result.duration}ms</Box>
+                            <Box as='td' p={1.5}>
                               {result.isAnomalous ? (
-                                <Badge colorPalette='orange'>{result.anomalyReasons.join(', ') || 'anomalous'}</Badge>
+                                <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor='orange.500' bg='rgba(249,115,22,0.1)'>{result.anomalyReasons.join(', ') || 'anomalous'}</Badge>
                               ) : (
-                                <Badge colorPalette='green'>baseline</Badge>
+                                <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor='green.500' bg='rgba(34,197,94,0.1)'>baseline</Badge>
                               )}
-                            </td>
-                          </tr>
+                            </Box>
+                          </Box>
                         ))}
-                      </tbody>
-                    </table>
+                      </Box>
+                    </Box>
                   </Box>
                 ) : null}
               </Box>

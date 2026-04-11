@@ -196,9 +196,9 @@ function TargetMapPanel({ themeId }) {
     <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default'>
       <VStack align='stretch' spacing={3}>
         <Flex justify='space-between' align='center' pb='3' borderBottomWidth='1px' borderColor='border.default'>
-          <Text fontWeight='medium' fontSize='sm'>Target Map</Text>
+          <Text fontWeight='medium' fontSize='sm' color='fg.default'>Target Map</Text>
           <HStack gap='2'>
-            <Button size='xs' variant='outline' onClick={loadScope}>Refresh Scope</Button>
+            <Button size='xs' variant='outline' onClick={loadScope} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh Scope</Button>
           </HStack>
         </Flex>
 
@@ -220,15 +220,15 @@ function TargetMapPanel({ themeId }) {
               >
                 Exclude
               </Button>
-              <Input placeholder='host (example.com)' value={form.host} onChange={event => setForm(prev => ({ ...prev, host: event.target.value }))} />
-              <Input placeholder='path (/api)' value={form.path} onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))} />
+              <Input placeholder='host (example.com)' value={form.host} onChange={event => setForm(prev => ({ ...prev, host: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+              <Input placeholder='path (/api)' value={form.path} onChange={event => setForm(prev => ({ ...prev, path: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
             </HStack>
             <HStack>
-              <Input placeholder='protocol (http/https)' value={form.protocol} onChange={event => setForm(prev => ({ ...prev, protocol: event.target.value }))} />
-              <Input placeholder='port (443)' value={form.port} onChange={event => setForm(prev => ({ ...prev, port: event.target.value }))} />
-              <Input placeholder='cidr (10.0.0.0/24)' value={form.cidr} onChange={event => setForm(prev => ({ ...prev, cidr: event.target.value }))} />
-              <Input placeholder='ip (192.168.1.15)' value={form.ip} onChange={event => setForm(prev => ({ ...prev, ip: event.target.value }))} />
-              <Button size='sm' onClick={addRule}>Add</Button>
+              <Input placeholder='protocol (http/https)' value={form.protocol} onChange={event => setForm(prev => ({ ...prev, protocol: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+              <Input placeholder='port (443)' value={form.port} onChange={event => setForm(prev => ({ ...prev, port: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+              <Input placeholder='cidr (10.0.0.0/24)' value={form.cidr} onChange={event => setForm(prev => ({ ...prev, cidr: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+              <Input placeholder='ip (192.168.1.15)' value={form.ip} onChange={event => setForm(prev => ({ ...prev, ip: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+              <Button size='sm' onClick={addRule} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Add</Button>
             </HStack>
           </VStack>
         </Box>
@@ -244,6 +244,10 @@ function TargetMapPanel({ themeId }) {
                 onClick={importBurp}
                 loading={importBurpLoading}
                 disabled={importBurpLoading || importCsvLoading}
+              color='fg.default'
+              bg='bg.surface'
+              borderColor='border.default'
+              _hover={{ bg: 'bg.subtle' }}
               >
                 Import Burp
               </Button>
@@ -255,6 +259,10 @@ function TargetMapPanel({ themeId }) {
                 variant={csvFormat === 'hackerone' ? 'solid' : 'outline'}
                 onClick={() => setCsvFormat('hackerone')}
                 disabled={importBurpLoading || importCsvLoading}
+              color={csvFormat === 'hackerone' ? 'fg.default' : 'fg.muted'}
+              bg={csvFormat === 'hackerone' ? 'bg.subtle' : 'bg.surface'}
+              borderColor='border.default'
+              _hover={{ bg: 'bg.subtle', color: 'fg.default' }}
               >
                 HackerOne
               </Button>
@@ -263,6 +271,10 @@ function TargetMapPanel({ themeId }) {
                 variant={csvFormat === 'generic' ? 'solid' : 'outline'}
                 onClick={() => setCsvFormat('generic')}
                 disabled={importBurpLoading || importCsvLoading}
+              color={csvFormat === 'generic' ? 'fg.default' : 'fg.muted'}
+              bg={csvFormat === 'generic' ? 'bg.subtle' : 'bg.surface'}
+              borderColor='border.default'
+              _hover={{ bg: 'bg.subtle', color: 'fg.default' }}
               >
                 Generic
               </Button>
@@ -272,6 +284,10 @@ function TargetMapPanel({ themeId }) {
                 onClick={importCsv}
                 loading={importCsvLoading}
                 disabled={importBurpLoading || importCsvLoading}
+              color='fg.default'
+              bg='bg.surface'
+              borderColor='border.default'
+              _hover={{ bg: 'bg.subtle' }}
               >
                 Import CSV
               </Button>
@@ -320,34 +336,46 @@ function TargetMapPanel({ themeId }) {
         <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
           <HStack justify='space-between' mb={2}>
             <Text fontWeight='semibold' fontSize='sm'>Scope Rules</Text>
-            <Code>{rules.length} rules</Code>
+            <Code color='fg.default' bg='bg.subtle'>{rules.length} rules</Code>
           </HStack>
           {rules.length === 0 ? (
             <Text fontSize='sm' color='fg.muted'>No scope rules configured.</Text>
           ) : rules.map(rule => (
             <HStack key={rule.id} justify='space-between' borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
               <HStack>
-                <Badge colorPalette={rule.kind === 'include' ? 'green' : 'red'}>{rule.kind}</Badge>
-                <Text fontSize='sm'>
+                  <Badge 
+                    variant='outline' 
+                    color='var(--sentinel-fg-default)' 
+                    borderColor={rule.kind === 'include' ? 'green.500' : 'red.500'} 
+                    bg={rule.kind === 'include' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}
+                  >
+                    {rule.kind}
+                  </Badge>
+                <Text fontSize='sm' color='fg.default'>
                   {rule.host || rule.ip || rule.cidr || 'unknown'}
                   {rule.path ? ` ${rule.path}` : ''}
                 </Text>
               </HStack>
-              <Button size='xs' variant='ghost' onClick={() => removeRule(rule.id)}>Remove</Button>
+              <Button size='xs' variant='ghost' onClick={() => removeRule(rule.id)} color='fg.muted' _hover={{ color: 'fg.default', bg: 'bg.subtle' }}>Remove</Button>
             </HStack>
           ))}
         </Box>
 
         <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
           <HStack justify='space-between' mb={2}>
-            <Text fontWeight='semibold' fontSize='sm'>Site Map</Text>
-            <Button size='xs' variant='outline' onClick={loadSitemap}>Refresh</Button>
+            <Text fontWeight='semibold' fontSize='sm' color='fg.default'>Site Map</Text>
+            <Button size='xs' variant='outline' onClick={loadSitemap} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh</Button>
           </HStack>
           {sitemapRows.length === 0 ? (
             <Text fontSize='sm' color='fg.muted'>No observed traffic yet.</Text>
           ) : sitemapRows.map(row => (
             <HStack key={row.id} pl={`${row.depth * 16}px`} spacing={2}>
-              <Badge colorPalette={row.inScope ? 'green' : 'orange'}>
+                <Badge 
+                  variant='outline' 
+                  color='var(--sentinel-fg-default)' 
+                  borderColor={row.inScope ? 'green.500' : 'orange.500'} 
+                  bg={row.inScope ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)'}
+                >
                 {row.inScope ? 'in-scope' : 'out-of-scope'}
               </Badge>
               <Text fontSize='sm'>{row.type === 'host' ? row.label : `/${row.label}`}</Text>

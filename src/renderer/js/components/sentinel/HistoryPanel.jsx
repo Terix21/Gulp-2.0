@@ -78,12 +78,12 @@ function InspectorSection({ item, inspectorTab, setInspectorTab, onSendToRepeate
 		<VStack align='stretch' h='100%' gap='3' p='3'>
 			<HStack justify='space-between' wrap='wrap'>
 				<Box>
-					<Text fontWeight='semibold'>{request.method || 'GET'} {request.host || 'unknown-host'}{request.path || '/'}</Text>
-					<Text fontSize='xs' color='fg.muted'>Status <Code>{String(response.statusCode || 'pending')}</Code></Text>
+					<Text fontWeight='semibold' color='fg.default'>{request.method || 'GET'} {request.host || 'unknown-host'}{request.path || '/'}</Text>
+					<Text fontSize='xs' color='fg.muted'>Status <Code color='fg.default' bg='bg.subtle'>{String(response.statusCode || 'pending')}</Code></Text>
 				</Box>
 				<HStack>
-					<Button size='xs' variant='outline' onClick={onSendToRepeater}>Send to Repeater</Button>
-					<Button size='xs' variant='outline' onClick={onSendToIntruder}>Send to Intruder</Button>
+					<Button size='xs' variant='outline' onClick={onSendToRepeater} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Repeater</Button>
+					<Button size='xs' variant='outline' onClick={onSendToIntruder} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Intruder</Button>
 				</HStack>
 			</HStack>
 			<HStack>
@@ -93,18 +93,22 @@ function InspectorSection({ item, inspectorTab, setInspectorTab, onSendToRepeate
 						size='xs'
 						variant={inspectorTab === tabName ? 'solid' : 'outline'}
 						onClick={() => setInspectorTab(tabName)}
+						color={inspectorTab === tabName ? 'fg.default' : 'fg.muted'}
+						bg={inspectorTab === tabName ? 'bg.subtle' : 'bg.surface'}
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle', color: 'fg.default' }}
 					>
 						{tabName === 'raw' ? 'Raw' : tabName === 'preview' ? 'Preview' : tabName === 'hex' ? 'Hex' : 'Headers'}
 					</Button>
 				))}
 			</HStack>
-			<Box flex='1' minH='0' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
+			<Box flex='1' minH='0' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
 				{inspectorTab === 'headers' ? (
 					<VStack align='stretch' gap='1' p='3' overflowY='auto' h='100%'>
 						{headersEntries.length === 0 ? <Text fontSize='sm' color='fg.muted'>No headers available.</Text> : null}
 						{headersEntries.map(([key, value]) => (
 							<Flex key={key} justify='space-between' gap='3' fontSize='sm'>
-								<Code>{key}</Code>
+								<Code color='fg.default' bg='bg.subtle'>{key}</Code>
 								<Text color='fg.muted' textAlign='right'>{String(value)}</Text>
 							</Flex>
 						))}
@@ -520,10 +524,10 @@ function HistoryPanel({ themeId }) {
 	return (
 		<Flex h='100%' overflow='hidden' direction='column'>
 			<Flex px='3' py='2' borderBottomWidth='1px' borderColor='border.default' bg='bg.elevated' align='center' justify='space-between' flexShrink='0'>
-				<Text fontWeight='medium' fontSize='sm'>History</Text>
+				<Text fontWeight='medium' fontSize='sm' color='fg.default'>History</Text>
 				<HStack gap='2'>
-					<Button size='xs' variant='outline' onClick={() => loadHistory(page)}>Refresh</Button>
-					<Button size='xs' variant='outline' colorPalette='red' onClick={clearHistory}>Clear</Button>
+					<Button size='xs' variant='outline' onClick={() => loadHistory(page)} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh</Button>
+					<Button size='xs' variant='outline' colorPalette='red' onClick={clearHistory} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Clear</Button>
 				</HStack>
 			</Flex>
 			<VStack align='stretch' spacing={3} p='4' flex='1' overflow='hidden'>
@@ -534,6 +538,10 @@ function HistoryPanel({ themeId }) {
 						placeholder='Host'
 						value={filters.host}
 						onChange={event => onFilterChange('host', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='180px'
 					/>
 					<Input
@@ -541,6 +549,10 @@ function HistoryPanel({ themeId }) {
 						placeholder='Path prefix'
 						value={filters.path}
 						onChange={event => onFilterChange('path', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='180px'
 					/>
 					<Input
@@ -548,6 +560,10 @@ function HistoryPanel({ themeId }) {
 						placeholder='Method (GET)'
 						value={filters.method}
 						onChange={event => onFilterChange('method', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='140px'
 					/>
 					<Input
@@ -556,15 +572,19 @@ function HistoryPanel({ themeId }) {
 						placeholder='Status (200)'
 						value={filters.statusCode}
 						onChange={event => onFilterChange('statusCode', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='140px'
 					/>
-					<Button size='xs' variant='outline' onClick={() => loadHistory(0)}>Apply</Button>
+					<Button size='xs' variant='outline' onClick={() => loadHistory(0)} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Apply</Button>
 				</HStack>
 
 				<Text fontSize='sm' color='fg.muted'>
-					Page <Code>{page + 1}</Code> / <Code>{totalPages}</Code> · Showing <Code>{items.length}</Code> of <Code>{total}</Code>
+					Page <Code color='fg.default' bg='bg.subtle'>{page + 1}</Code> / <Code color='fg.default' bg='bg.subtle'>{totalPages}</Code> · Showing <Code color='fg.default' bg='bg.subtle'>{items.length}</Code> of <Code color='fg.default' bg='bg.subtle'>{total}</Code>
 				</Text>
-				<Text fontSize='xs' color='fg.muted'>Buffered stream flush cadence <Code>150ms</Code></Text>
+				<Text fontSize='xs' color='fg.muted'>Buffered stream flush cadence <Code color='fg.default' bg='bg.subtle'>150ms</Code></Text>
 
 				<Flex flex='1' minH='0' gap='3' overflow='hidden'>
 					<Box flex='1' minW='0' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
@@ -593,6 +613,10 @@ function HistoryPanel({ themeId }) {
 						variant='outline'
 						onClick={() => loadHistory(Math.max(0, page - 1))}
 						disabled={page <= 0}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle' }}
 					>
 						Previous
 					</Button>
@@ -601,6 +625,10 @@ function HistoryPanel({ themeId }) {
 						variant='outline'
 						onClick={() => loadHistory(page + 1)}
 						disabled={(page + 1) >= totalPages}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle' }}
 					>
 						Next
 					</Button>

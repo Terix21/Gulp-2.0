@@ -88,38 +88,38 @@ function OobPanel({ themeId }) {
     <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default'>
       <VStack align='stretch' spacing={3}>
         <Flex justify='space-between' align='center' pb='3' borderBottomWidth='1px' borderColor='border.default'>
-          <Text fontWeight='medium' fontSize='sm'>OOB</Text>
+          <Text fontWeight='medium' fontSize='sm' color='fg.default'>OOB</Text>
           <HStack gap='2'>
-            <Button size='xs' variant='outline' onClick={createPayload}>Generate Payload</Button>
-            <Button size='xs' variant='outline' onClick={() => loadHits()}>Refresh Hits</Button>
+            <Button size='xs' variant='outline' onClick={createPayload} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Generate Payload</Button>
+            <Button size='xs' variant='outline' onClick={() => loadHits()} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh Hits</Button>
           </HStack>
         </Flex>
 
         <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
-          <Text fontWeight='semibold' fontSize='sm' mb={2}>Payload Generator</Text>
+          <Text fontWeight='semibold' fontSize='sm' mb={2} color='fg.default'>Payload Generator</Text>
           <HStack>
-            <Input value={payloadType} onChange={event => setPayloadType(event.target.value)} placeholder='Type: http | dns | smtp' maxW='180px' />
-            <Input value={sourceRequestId} onChange={event => setSourceRequestId(event.target.value)} placeholder='Source request ID (optional)' />
+            <Input value={payloadType} onChange={event => setPayloadType(event.target.value)} placeholder='Type: http | dns | smtp' maxW='180px' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+            <Input value={sourceRequestId} onChange={event => setSourceRequestId(event.target.value)} placeholder='Source request ID (optional)' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
           </HStack>
           <HStack mt={2}>
-            <Input value={sourceScanId} onChange={event => setSourceScanId(event.target.value)} placeholder='Source scan ID (optional)' />
-            <Input value={targetUrl} onChange={event => setTargetUrl(event.target.value)} placeholder='Target URL (optional)' />
+            <Input value={sourceScanId} onChange={event => setSourceScanId(event.target.value)} placeholder='Source scan ID (optional)' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+            <Input value={targetUrl} onChange={event => setTargetUrl(event.target.value)} placeholder='Target URL (optional)' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
           </HStack>
           <Button mt={3} size='sm' colorPalette='blue' onClick={createPayload}>Create Payload</Button>
         </Box>
 
         <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
           <HStack justify='space-between' mb={2}>
-            <Text fontWeight='semibold' fontSize='sm'>Generated Payloads</Text>
-            <Code>{payloads.length}</Code>
+            <Text fontWeight='semibold' fontSize='sm' color='fg.default'>Generated Payloads</Text>
+            <Code color='fg.default' bg='bg.subtle'>{payloads.length}</Code>
           </HStack>
           {payloads.length === 0 ? (
             <Text fontSize='sm' color='fg.muted'>No payloads generated yet.</Text>
           ) : payloads.map((payload) => (
             <Box key={payload.id} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
               <HStack justify='space-between'>
-                <Code>{payload.id}</Code>
-                <Badge>{payload.kind || payloadType}</Badge>
+                <Code color='fg.default' bg='bg.subtle'>{payload.id}</Code>
+                <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor='border.default' bg='bg.subtle'>{payload.kind || payloadType}</Badge>
               </HStack>
               <Text fontSize='sm' color='fg.muted'>{payload.url}</Text>
               {isLoopbackUrl(payload.url) ? (
@@ -128,8 +128,8 @@ function OobPanel({ themeId }) {
                   Listener is bound to a loopback address. External targets cannot deliver callbacks to this URL. Configure a routable listener host to receive out-of-band interactions.
                 </Text>
               ) : null}
-              <Text fontSize='xs' color='fg.muted'>Domain marker: <Code>{payload.domain}</Code></Text>
-              <Button mt={2} size='xs' variant='outline' onClick={() => {
+              <Text fontSize='xs' color='fg.muted'>Domain marker: <Code color='fg.default' bg='bg.subtle'>{payload.domain}</Code></Text>
+              <Button mt={2} size='xs' variant='outline' color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }} onClick={() => {
                 setSelectedPayloadId(payload.id);
                 loadHits(payload.id).catch(() => {});
               }}>
@@ -141,23 +141,23 @@ function OobPanel({ themeId }) {
 
         <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
           <HStack justify='space-between' mb={2}>
-            <Text fontWeight='semibold' fontSize='sm'>Callbacks</Text>
-            <Code>{hits.length}</Code>
+            <Text fontWeight='semibold' fontSize='sm' color='fg.default'>Callbacks</Text>
+            <Code color='fg.default' bg='bg.subtle'>{hits.length}</Code>
           </HStack>
           {hits.length === 0 ? (
             <Text fontSize='sm' color='fg.muted'>No callbacks recorded for the selected payload.</Text>
           ) : hits.map((hit) => (
             <Box key={hit.id} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
               <HStack justify='space-between'>
-                <Code>{hit.id}</Code>
-                <Badge colorPalette='green'>{hit.kind || 'http'}</Badge>
+                <Code color='fg.default' bg='bg.subtle'>{hit.id}</Code>
+                <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor='green.500' bg='rgba(34,197,94,0.1)'>{hit.kind || 'http'}</Badge>
               </HStack>
-              <Text fontSize='sm'>Source: <Code>{hit.source || 'unknown'}</Code></Text>
-              <Text fontSize='sm'>Path: <Code>{hit.requestPath || '/'}</Code></Text>
+              <Text fontSize='sm' color='fg.default'>Source: <Code color='fg.default' bg='bg.subtle'>{hit.source || 'unknown'}</Code></Text>
+              <Text fontSize='sm' color='fg.default'>Path: <Code color='fg.default' bg='bg.subtle'>{hit.requestPath || '/'}</Code></Text>
               {hit.correlation ? (
                 <Text fontSize='xs' color='fg.muted'>
-                  Correlation: request=<Code>{hit.correlation.sourceRequestId || 'n/a'}</Code>,
-                  scan=<Code>{hit.correlation.sourceScanId || 'n/a'}</Code>
+                  Correlation: request=<Code color='fg.default' bg='bg.subtle'>{hit.correlation.sourceRequestId || 'n/a'}</Code>,
+                  scan=<Code color='fg.default' bg='bg.subtle'>{hit.correlation.sourceScanId || 'n/a'}</Code>
                 </Text>
               ) : null}
             </Box>

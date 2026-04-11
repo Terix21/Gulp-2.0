@@ -501,13 +501,18 @@ function createWindow () {
       `code=${code} mainFrame=${Boolean(isMainFrame)} url=${url || 'n/a'} reason=${description || 'unknown'}`,
     );
   });
-  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+  mainWindow.webContents.on('console-message', (event) => {
+    const level = event.level;
+    const message = event.message;
+    const line = Number.isFinite(event.lineNumber) ? event.lineNumber : event.line;
+    const sourceId = event.sourceId;
+
     let severity = 'info';
-    if (level === 1) {
+    if (level === 'warning' || level === 'warn') {
       severity = 'warn';
-    } else if (level === 2) {
+    } else if (level === 'error') {
       severity = 'error';
-    } else if (level === 3) {
+    } else if (level === 'debug' || level === 'verbose') {
       severity = 'debug';
     }
 

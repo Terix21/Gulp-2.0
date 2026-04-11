@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
   Box,
   Button,
@@ -45,8 +46,8 @@ function DecoderPanel({ themeId }) {
   const [errorText, setErrorText] = React.useState('');
 
   async function runDecoder() {
-    const sentinel = window.sentinel;
-    if (!sentinel || !sentinel.decoder) {
+      const sentinel = globalThis.window?.sentinel;
+      if (!sentinel?.decoder) {
       return;
     }
 
@@ -59,10 +60,10 @@ function DecoderPanel({ themeId }) {
         recursiveDepth: Number(recursiveDepth) || 1,
       });
 
-      setResult(String(payload.result || ''));
-      setSteps(Array.isArray(payload.detailedSteps) ? payload.detailedSteps : []);
+      setResult(String(payload?.result ?? ''));
+      setSteps(Array.isArray(payload?.detailedSteps) ? payload.detailedSteps : []);
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to process decoder chain.');
+      setErrorText(error?.message ?? 'Unable to process decoder chain.');
     }
   }
 
@@ -81,7 +82,7 @@ function DecoderPanel({ themeId }) {
   }
 
   return (
-    <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default'>
+    <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.panel' color='fg.default'>
       <VStack align='stretch' spacing={3}>
         <Flex justify='space-between' align='center' pb='3' borderBottomWidth='1px' borderColor='border.default'>
           <Text fontWeight='medium' fontSize='sm'>Decoder</Text>
@@ -90,29 +91,37 @@ function DecoderPanel({ themeId }) {
           </HStack>
         </Flex>
 
-        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
+        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' p={3}>
           <Text fontWeight='semibold' fontSize='sm' mb={2}>Input</Text>
           <Textarea
             rows={7}
             value={input}
             onChange={event => setInput(event.target.value)}
             placeholder='Paste encoded/decoded text here...'
+            color='fg.default'
+            bg='bg.surface'
+            borderColor='border.default'
+            _placeholder={{ color: 'fg.muted' }}
           />
         </Box>
 
-        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
+        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' p={3}>
           <HStack justify='space-between' mb={2}>
             <Text fontWeight='semibold' fontSize='sm'>Operation Chain</Text>
-            <Code>{operations.length} steps</Code>
+            <Code color='fg.default' bg='bg.subtle'>{operations.length} steps</Code>
           </HStack>
 
           {operations.map((operation, index) => (
             <HStack key={operation.id} mb={2}>
-              <Code minW='80px'>{index + 1}</Code>
+              <Code minW='80px' color='fg.default' bg='bg.subtle'>{index + 1}</Code>
               <Input
                 value={operation.op}
                 onChange={event => updateOperation(index, event.target.value)}
                 placeholder='operation'
+                color='fg.default'
+                bg='bg.surface'
+                borderColor='border.default'
+                _placeholder={{ color: 'fg.muted' }}
               />
               <Button size='xs' variant='ghost' onClick={() => removeOperation(index)} disabled={operations.length <= 1}>Remove</Button>
             </HStack>
@@ -130,6 +139,10 @@ function DecoderPanel({ themeId }) {
               value={recursiveDepth}
               onChange={event => setRecursiveDepth(event.target.value)}
               placeholder='recursive depth'
+              color='fg.default'
+              bg='bg.surface'
+              borderColor='border.default'
+              _placeholder={{ color: 'fg.muted' }}
             />
             <Button size='sm' variant={reverse ? 'solid' : 'outline'} onClick={() => setReverse(prev => !prev)}>
               Reverse Chain
@@ -138,20 +151,27 @@ function DecoderPanel({ themeId }) {
           </HStack>
         </Box>
 
-        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
+        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' p={3}>
           <Text fontWeight='semibold' fontSize='sm' mb={2}>Output</Text>
-          <Textarea rows={7} value={result} readOnly />
+          <Textarea
+            rows={7}
+            value={result}
+            readOnly
+            color='fg.default'
+            bg='bg.surface'
+            borderColor='border.default'
+          />
         </Box>
 
-        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
+        <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' p={3}>
           <Text fontWeight='semibold' fontSize='sm' mb={2}>Intermediate Steps</Text>
           {steps.length === 0 ? (
             <Text fontSize='sm' color='fg.muted'>Run a chain to see intermediate outputs.</Text>
           ) : steps.map((step, index) => (
-            <Box key={index} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
-              <Text fontSize='sm'><Code>{step.pass}.{index + 1}</Code> {step.operation}</Text>
-              <Text fontSize='xs' color='fg.muted'>Input: <Code>{String(step.input || '').slice(0, 120)}</Code></Text>
-              <Text fontSize='xs' color='fg.muted'>Output: <Code>{String(step.output || '').slice(0, 120)}</Code></Text>
+            <Box key={`${step.pass}-${step.operation}-${String(step.input ?? '').slice(0, 16)}-${String(step.output ?? '').slice(0, 16)}`} borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.panel' p={2} mb={2}>
+              <Text fontSize='sm'><Code color='fg.default' bg='bg.subtle'>{step.pass}.{index + 1}</Code> {step.operation}</Text>
+              <Text fontSize='xs' color='fg.muted'>Input: <Code color='fg.default' bg='bg.subtle'>{String(step.input || '').slice(0, 120)}</Code></Text>
+              <Text fontSize='xs' color='fg.muted'>Output: <Code color='fg.default' bg='bg.subtle'>{String(step.output || '').slice(0, 120)}</Code></Text>
             </Box>
           ))}
         </Box>
@@ -161,5 +181,9 @@ function DecoderPanel({ themeId }) {
     </Box>
   );
 }
+
+DecoderPanel.propTypes = {
+  themeId: PropTypes.string,
+};
 
 export default DecoderPanel;

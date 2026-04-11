@@ -21,7 +21,8 @@ import {
 	Textarea,
 	VStack,
 } from '@chakra-ui/react';
-import { getStatusTextColor } from './theme-utils';
+import MonacoEditor from '@monaco-editor/react';
+import { getStatusTextColor, getMonacoTheme } from './theme-utils';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,7 +79,7 @@ function toHex(base64) {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ResponseViewer({ response }) {
+function ResponseViewer({ response, themeId }) {
 	const [view, setView] = React.useState('raw');
 
 	if (!response) {
@@ -101,10 +102,17 @@ function ResponseViewer({ response }) {
 		? response.body
 		: null;
 
+	const statusColorMap = {
+		green: { border: 'green.500', bg: 'rgba(34,197,94,0.1)' },
+		blue: { border: 'blue.500', bg: 'rgba(59,130,246,0.1)' },
+		red: { border: 'red.500', bg: 'rgba(239,68,68,0.1)' }
+	};
+	const badgeStyles = statusColorMap[statusColor] || statusColorMap.blue;
+
 	return (
 		<Box borderWidth='1px' borderRadius='md' p={3}>
 			<HStack mb={2} wrap='wrap'>
-				<Badge colorPalette={statusColor}>
+				<Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={badgeStyles.border} bg={badgeStyles.bg}>
 					{response.statusCode} {response.statusMessage}
 				</Badge>
 				<Text fontSize='xs' color='fg.muted'>
@@ -119,24 +127,24 @@ function ResponseViewer({ response }) {
 						size='xs'
 						variant={view === mode ? 'solid' : 'ghost'}
 						onClick={() => setView(mode)}
+						color={view === mode ? 'fg.default' : 'fg.muted'}
+						bg={view === mode ? 'bg.subtle' : 'bg.surface'}
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle', color: 'fg.default' }}
 					>
 						{mode.charAt(0).toUpperCase() + mode.slice(1)}
 					</Button>
 				))}
 			</HStack>
 			{view === 'raw' && (
-				<Box
-					as='pre'
-					fontSize='xs'
-					fontFamily='mono'
-					whiteSpace='pre-wrap'
-					overflowY='auto'
-					maxH='240px'
-					p={2}
-					borderWidth='1px'
-					borderRadius='sm'
-				>
-					{rawText}
+				<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
+					<MonacoEditor
+						height='240px'
+						defaultLanguage='http'
+						theme={getMonacoTheme(themeId)}
+						value={rawText}
+						options={{ readOnly: true, minimap: { enabled: false }, wordWrap: 'on', fontSize: 12 }}
+					/>
 				</Box>
 			)}
 			{view === 'hex' && (
@@ -231,29 +239,35 @@ function CompareView({ sends }) {
 			<HStack mb={3} align='flex-start' wrap='wrap'>
 				<Box flex='1' minW='200px'>
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send A</Text>
-					<select
+					<Select
+						size='xs'
 						value={idA}
 						onChange={e => setIdA(e.target.value)}
-						style={{ width: '100%', fontSize: '12px', padding: '2px 4px' }}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
 							<option key={s.id} value={s.id}>{labelFor(s)}</option>
 						))}
-					</select>
+					</Select>
 				</Box>
 				<Box flex='1' minW='200px'>
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send B</Text>
-					<select
+					<Select
+						size='xs'
 						value={idB}
 						onChange={e => setIdB(e.target.value)}
-						style={{ width: '100%', fontSize: '12px', padding: '2px 4px' }}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
 							<option key={s.id} value={s.id}>{labelFor(s)}</option>
 						))}
-					</select>
+					</Select>
 				</Box>
 			</HStack>
 			{(idA || idB) && (
@@ -419,9 +433,9 @@ function RepeaterPanel({ themeId }) {
 		<Box p={4} h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='md'>
 			<VStack align='stretch' spacing={3}>
 				<Flex justify='space-between' align='center' mb='3' pb='3' borderBottomWidth='1px' borderColor='border.default'>
-					<Text fontWeight='medium' fontSize='sm'>Repeater</Text>
+					<Text fontWeight='medium' fontSize='sm' color='fg.default'>Repeater</Text>
 					<HStack gap='2'>
-						<Button size='xs' variant='outline' onClick={clearEditor}>New Request</Button>
+						<Button size='xs' variant='outline' onClick={clearEditor} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>New Request</Button>
 					</HStack>
 				</Flex>
 
@@ -463,6 +477,10 @@ function RepeaterPanel({ themeId }) {
 									placeholder='GET'
 									fontFamily='mono'
 									textTransform='uppercase'
+									color='fg.default'
+									bg='bg.surface'
+									borderColor='border.default'
+									_placeholder={{ color: 'fg.muted' }}
 								/>
 								<Input
 									size='sm'
@@ -471,6 +489,10 @@ function RepeaterPanel({ themeId }) {
 									onChange={e => setEditUrl(e.target.value)}
 									placeholder='https://example.com/path'
 									fontFamily='mono'
+									color='fg.default'
+									bg='bg.surface'
+									borderColor='border.default'
+									_placeholder={{ color: 'fg.muted' }}
 								/>
 								<Button
 									size='sm'
@@ -492,6 +514,10 @@ function RepeaterPanel({ themeId }) {
 								rows={4}
 								fontFamily='mono'
 								fontSize='xs'
+								color='fg.default'
+								bg='bg.surface'
+								borderColor='border.default'
+								_placeholder={{ color: 'fg.muted' }}
 							/>
 
 							{/* Body */}
@@ -503,12 +529,16 @@ function RepeaterPanel({ themeId }) {
 								rows={5}
 								fontFamily='mono'
 								fontSize='xs'
+								color='fg.default'
+								bg='bg.surface'
+								borderColor='border.default'
+								_placeholder={{ color: 'fg.muted' }}
 							/>
 
 							{errorText && <Text color={getStatusTextColor('error', themeId)} fontSize='sm'>{errorText}</Text>}
 
 							{/* Response viewer — AC 3 */}
-							<ResponseViewer response={response} />
+							<ResponseViewer response={response} themeId={themeId} />
 
 							{/* Send history for this entry — AC 4 */}
 							{activeSends.length > 0 && (
@@ -521,6 +551,10 @@ function RepeaterPanel({ themeId }) {
 											size='xs'
 											variant='outline'
 											onClick={() => setCompareOpen(prev => !prev)}
+											color='fg.default'
+											bg='bg.surface'
+											borderColor='border.default'
+											_hover={{ bg: 'bg.subtle' }}
 										>
 											{compareOpen ? 'Hide Compare' : 'Compare…'}
 										</Button>
@@ -532,7 +566,7 @@ function RepeaterPanel({ themeId }) {
 													{send.request.method}{' '}
 													{send.request.path || send.request.url || '/'}{' '}
 													→{' '}
-													<Code fontSize='xs'>
+													<Code fontSize='xs' color='fg.default' bg='bg.subtle'>
 														{send.response && send.response.statusCode}
 													</Code>
 												</Text>
@@ -560,4 +594,3 @@ function RepeaterPanel({ themeId }) {
 }
 
 export default RepeaterPanel;
-

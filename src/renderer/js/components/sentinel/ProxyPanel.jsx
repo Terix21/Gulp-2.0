@@ -258,27 +258,27 @@ function ProxyPanel({ themeId }) {
 		<Flex h='100%' overflow='hidden' direction='column'>
 			<Flex px='3' py='2' borderBottomWidth='1px' borderColor='border.default' bg='bg.elevated' align='center' justify='space-between' flexShrink='0' wrap='wrap' gap='2'>
 				<HStack gap='3'>
-					<Text fontWeight='medium' fontSize='sm'>Proxy</Text>
-					<Badge colorPalette={status.running ? 'green' : 'orange'}>
+					<Text fontWeight='medium' fontSize='sm' color='fg.default'>Proxy</Text>
+					<Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={status.running ? 'green.500' : 'orange.500'} bg={status.running ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)'}>
 						{status.running ? 'Running' : 'Stopped'}
 					</Badge>
-					<Badge colorPalette={status.intercepting ? 'purple' : 'blue'}>
+					<Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={status.intercepting ? 'purple.500' : 'blue.500'} bg={status.intercepting ? 'rgba(168,85,247,0.1)' : 'rgba(59,130,246,0.1)'}>
 						Intercept {status.intercepting ? 'On' : 'Off'}
 					</Badge>
-					<Text fontSize='xs' color='fg.muted'>Port <Code>{status.port}</Code></Text>
+					<Text fontSize='xs' color='fg.muted'>Port <Code color='fg.default' bg='bg.subtle'>{status.port}</Code></Text>
 				</HStack>
 				<HStack gap='2'>
-					<Button size='xs' variant='outline' onClick={status.running ? stopProxy : startProxy}>
+					<Button size='xs' variant='outline' onClick={status.running ? stopProxy : startProxy} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>
 						{status.running ? 'Stop' : 'Start'}
 					</Button>
-					<Button size='xs' variant='outline' onClick={toggleIntercept}>
+					<Button size='xs' variant='outline' onClick={toggleIntercept} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>
 						{status.intercepting ? 'Resume All' : 'Pause All'}
 					</Button>
 				</HStack>
 			</Flex>
 			<VStack align='stretch' spacing={3} p='4' flex='1' overflow='hidden'>
 				<Text color='fg.muted' fontSize='sm'>
-					Intercept queue depth: <Code>{queue.length}</Code> · Inspector mode <Code>{inspectorTab.toUpperCase()}</Code>
+					Intercept queue depth: <Code color='fg.default' bg='bg.subtle'>{queue.length}</Code> · Inspector mode <Code color='fg.default' bg='bg.subtle'>{inspectorTab.toUpperCase()}</Code>
 				</Text>
 
 				<Flex flex='1' minH='0' gap='3' overflow='hidden'>
@@ -296,17 +296,17 @@ function ProxyPanel({ themeId }) {
 								<HStack justify='space-between' wrap='wrap'>
 									<Box>
 										<Text fontWeight='semibold'>{selected.method} {selected.host}{selected.path}</Text>
-										<Text fontSize='xs' color='fg.muted'>Request ID <Code>{selected.id}</Code></Text>
+										<Text fontSize='xs' color='fg.muted'>Request ID <Code color='fg.default' bg='bg.subtle'>{selected.id}</Code></Text>
 									</Box>
 									<HStack>
-										<Button size='xs' variant={inspectorTab === 'raw' ? 'solid' : 'outline'} onClick={() => setInspectorTab('raw')}>Raw</Button>
-										<Button size='xs' variant={inspectorTab === 'edit' ? 'solid' : 'outline'} onClick={() => setInspectorTab('edit')}>Edit</Button>
+										<Button size='xs' variant={inspectorTab === 'raw' ? 'solid' : 'outline'} onClick={() => setInspectorTab('raw')} color={inspectorTab === 'raw' ? 'fg.default' : 'fg.muted'} bg={inspectorTab === 'raw' ? 'bg.subtle' : 'bg.surface'} borderColor='border.default' _hover={{ bg: 'bg.subtle', color: 'fg.default' }}>Raw</Button>
+										<Button size='xs' variant={inspectorTab === 'edit' ? 'solid' : 'outline'} onClick={() => setInspectorTab('edit')} color={inspectorTab === 'edit' ? 'fg.default' : 'fg.muted'} bg={inspectorTab === 'edit' ? 'bg.subtle' : 'bg.surface'} borderColor='border.default' _hover={{ bg: 'bg.subtle', color: 'fg.default' }}>Edit</Button>
 									</HStack>
 								</HStack>
 								{inspectorTab === 'edit' ? (
 									<VStack align='stretch' spacing={2}>
-										<Input size='sm' value={editPath} onChange={event => setEditPath(event.target.value)} placeholder='Path' fontFamily='mono' />
-										<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
+										<Input size='sm' value={editPath} onChange={event => setEditPath(event.target.value)} placeholder='Path' fontFamily='mono' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+										<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
 											<MonacoEditor
 												height='240px'
 												defaultLanguage='text'
@@ -318,7 +318,7 @@ function ProxyPanel({ themeId }) {
 										</Box>
 									</VStack>
 								) : (
-									<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
+									<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
 										<MonacoEditor
 											height='240px'
 											defaultLanguage='http'
@@ -331,8 +331,8 @@ function ProxyPanel({ themeId }) {
 								<Separator />
 								<HStack>
 									<Button size='sm' colorPalette='green' onClick={forwardSelected}>Forward</Button>
-									<Button size='sm' variant='outline' onClick={sendSelectedToRepeater}>Send to Repeater</Button>
-									<Button size='sm' colorPalette='red' variant='outline' onClick={dropSelected}>Drop</Button>
+									<Button size='sm' variant='outline' onClick={sendSelectedToRepeater} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Repeater</Button>
+									<Button size='sm' colorPalette='red' variant='outline' onClick={dropSelected} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Drop</Button>
 								</HStack>
 							</VStack>
 						) : (

@@ -141,7 +141,7 @@ function ExtensionsPanel({ themeId }) {
       </Flex>
 
       <Text fontSize='sm' color='fg.muted'>
-        Managed directory: <Code>{extensionsDir || 'unavailable'}</Code>
+        Managed directory: <Code color='fg.default' bg='bg.subtle'>{extensionsDir || 'unavailable'}</Code>
       </Text>
 
       {errorText ? (
@@ -228,7 +228,7 @@ function ExtensionsPanel({ themeId }) {
                   <Box>
                     <Text fontSize='sm' fontWeight='semibold'>{extension.name}</Text>
                     <Text fontSize='xs' color='fg.muted'>
-                      <Code>{extension.id}</Code> v{extension.version}
+                      <Code color='fg.default' bg='bg.subtle'>{extension.id}</Code> v{extension.version}
                     </Text>
                     <Text fontSize='xs' color='fg.muted'>
                       Permissions: {(extension.permissions || []).join(', ') || 'none'}
@@ -265,7 +265,7 @@ function ExtensionsPanel({ themeId }) {
             {auditLog.slice(0, 100).map((entry) => (
               <Box key={entry.id} borderWidth='1px' borderRadius='sm' p='2'>
                 <Text fontSize='xs'>
-                  <Code>{entry.extensionId}</Code> {entry.action} ({entry.status})
+                  <Code color='fg.default' bg='bg.subtle'>{entry.extensionId}</Code> {entry.action} ({entry.status})
                 </Text>
                 {entry.message ? <Text fontSize='xs' color='fg.muted'>{entry.message}</Text> : null}
               </Box>
