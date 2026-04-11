@@ -13,15 +13,13 @@ import { modules, moduleDescriptions } from '../app-constants';
 // needing a Chakra context provider in the test environment.
 // ---------------------------------------------------------------------------
 function TestApp() {
-  const [activeModule, setActiveModule] = useState('Dashboard');
   const [openPanes, setOpenPanes]       = useState(['Dashboard', 'Proxy']);
   const [activePane, setActivePane]     = useState('Dashboard');
   const [proxyRunning, setProxyRunning] = useState(true);
 
-  const versions = (window.electronInfo && window.electronInfo.versions) || {};
+  const versions = globalThis.electronInfo?.versions ?? {};
 
   const addPane = (name) => {
-    setActiveModule(name);
     setOpenPanes(prev => prev.includes(name) ? prev : [...prev, name]);
     setActivePane(name);
   };
@@ -91,7 +89,7 @@ function TestApp() {
 }
 
 beforeEach(() => {
-  window.electronInfo = {
+  globalThis.electronInfo = {
     versions: { node: '20.0.0', chrome: '130.0.0', electron: '41.1.0' },
   };
 });
@@ -182,7 +180,7 @@ describe('App rendering', () => {
     });
   });
 
-  it('shows version info from window.electronInfo', () => {
+  it('shows version info from globalThis.electronInfo', () => {
     render(<TestApp />);
     expect(screen.getByText('20.0.0')).toBeTruthy();
     expect(screen.getByText('130.0.0')).toBeTruthy();
@@ -190,7 +188,7 @@ describe('App rendering', () => {
   });
 
   it('falls back to "unknown" when electronInfo is absent', () => {
-    window.electronInfo = null;
+    globalThis.electronInfo = null;
     render(<TestApp />);
     expect(screen.getAllByText('unknown').length).toBeGreaterThanOrEqual(3);
   });
@@ -229,21 +227,21 @@ describe('App rendering', () => {
 // ---------------------------------------------------------------------------
 describe('version display logic', () => {
   it('extracts versions safely', () => {
-    const extract = (info) => (info && info.versions) || {};
-    expect(Object.keys(extract(window.electronInfo)).length).toBe(3);
+    const extract = (info) => info?.versions ?? {};
+    expect(Object.keys(extract(globalThis.electronInfo)).length).toBe(3);
     expect(Object.keys(extract(null)).length).toBe(0);
     expect(Object.keys(extract(undefined)).length).toBe(0);
   });
 
   it('version strings match semver format', () => {
-    const { node, chrome, electron } = window.electronInfo.versions;
+    const { node, chrome, electron } = globalThis.electronInfo.versions;
     [node, chrome, electron].forEach(v => {
       expect(v).toMatch(/^\d+\.\d+\.\d+$/);
     });
   });
 
   it('version entries have expected keys', () => {
-    const entries = Object.entries(window.electronInfo.versions);
+    const entries = Object.entries(globalThis.electronInfo.versions);
     expect(entries.length).toBe(3);
     entries.forEach(([k]) => {
       expect(['node', 'chrome', 'electron']).toContain(k);

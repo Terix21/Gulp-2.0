@@ -22,7 +22,7 @@ module.exports = defineConfig({
         chunkFileNames: 'js/[name].js',
         // Route CSS to css/style.css and other assets to assets/
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+          if (assetInfo.names?.some((name) => name.endsWith('.css'))) {
             return 'css/style.css';
           }
           return 'assets/[name][extname]';
@@ -49,6 +49,8 @@ module.exports = defineConfig({
           },
         },
       },
+      // Keep renderer bridge enabled. vite-plugin-electron requires
+      // vite-plugin-electron-renderer to be installed when this option is used.
       renderer: {},
     }),
     viteStaticCopy({
