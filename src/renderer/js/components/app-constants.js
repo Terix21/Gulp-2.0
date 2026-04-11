@@ -1,5 +1,3 @@
-'use strict';
-
 /**
  * Shared module-list and description constants consumed by App.jsx and its
  * tests.  Extracting them here ensures tests cannot silently diverge from the
