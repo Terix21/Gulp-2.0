@@ -49,7 +49,7 @@ function getOverlayScrim(explicitThemeId) {
     : 'rgba(232, 238, 247, 0.82)';
 }
 
-module.exports = {
+export {
   isDarkTheme,
   getMonacoTheme,
   getStatusTextColor,

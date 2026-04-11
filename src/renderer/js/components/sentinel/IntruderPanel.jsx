@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
   Badge,
   Box,
   Button,
@@ -10,8 +10,8 @@ const {
   Text,
   Textarea,
   VStack,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 const MARKER_REGEX = /§([^§]*)§/g;
 
@@ -608,4 +608,4 @@ function IntruderPanel({ themeId }) {
   );
 }
 
-module.exports = IntruderPanel;
+export default IntruderPanel;

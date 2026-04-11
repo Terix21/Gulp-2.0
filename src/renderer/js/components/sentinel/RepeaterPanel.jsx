@@ -7,8 +7,8 @@ AC 4: Each send stored in the entry's local history.
 AC 5: Side-by-side compare between two sends.
 */
 
-const React = require('react');
-const {
+import React from 'react';
+import {
 	Badge,
 	Box,
 	Button,
@@ -20,8 +20,8 @@ const {
 	Text,
 	Textarea,
 	VStack,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -559,5 +559,5 @@ function RepeaterPanel({ themeId }) {
 	);
 }
 
-module.exports = RepeaterPanel;
+export default RepeaterPanel;
 

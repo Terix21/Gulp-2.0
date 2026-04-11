@@ -26,15 +26,16 @@ describe('post-build dist runtime validation', () => {
   it('keeps main process BrowserWindow security flags explicit in built output', () => {
     const builtMain = read('dist/main/index.js');
 
-    expect(builtMain).toContain('contextIsolation: true');
-    expect(builtMain).toContain('nodeIntegration: false');
-    expect(builtMain).toContain('sandbox: true');
+    // esbuild minifies true → !0 and false → !1
+    expect(builtMain).toMatch(/contextIsolation:\s*(?:true|!0)/);
+    expect(builtMain).toMatch(/nodeIntegration:\s*(?:false|!1)/);
+    expect(builtMain).toMatch(/sandbox:\s*(?:true|!0)/);
   });
 
   it('keeps preload bridge exports in built output', () => {
     const builtPreload = read('dist/main/preload.js');
 
-    expect(builtPreload).toContain("exposeInMainWorld('sentinel'");
-    expect(builtPreload).toContain("exposeInMainWorld('electronInfo'");
+    expect(builtPreload).toMatch(/exposeInMainWorld\(["']sentinel["']/);
+    expect(builtPreload).toMatch(/exposeInMainWorld\(["']electronInfo["']/);
   });
 });

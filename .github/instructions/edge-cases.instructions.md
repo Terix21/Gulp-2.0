@@ -24,3 +24,5 @@ Known operational and implementation edge cases for this repository.
 - 2026-04-02: Unthrottled per-event React updates from proxy/scanner streams can freeze renderer under burst traffic; use buffered flush windows (100-200ms).
 - 2026-04-02: Rendering full proxy arrays in top-level state causes memory growth and list thrash; use virtualization and demand-loaded detail panels.
 - 2026-04-02: Row selection should not trigger table data regeneration; keep master list model stable and isolate inspector state.
+- 2026-04-08: Vite production builds do not transform CJS require() in renderer source files — all renderer JS/JSX must use native ESM (import/export). Use scripts/cjs-to-esm.js for bulk conversion. @rollup/plugin-commonjs and @originjs/vite-plugin-commonjs both fail or produce noise in this stack; do not add them.
+- 2026-04-08: GPU disk-cache access-denied errors at Electron startup on Windows are non-fatal and do not affect renderer rendering; they are Chromium cache-path permission issues only.

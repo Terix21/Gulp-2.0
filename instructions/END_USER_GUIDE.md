@@ -1,6 +1,6 @@
 # Sentinel End-User Guide
 
-> **Version: 1.0 — Current as of 2026-04-06 (M1–M9 complete)**
+> **Version: 1.1 - Current as of 2026-04-07 (M1-M9 complete)**
 
 ## What This App Is
 Sentinel is a desktop web-security workbench for capturing, inspecting, replaying, and analyzing HTTP traffic.

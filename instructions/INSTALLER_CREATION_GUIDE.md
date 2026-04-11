@@ -17,8 +17,8 @@ Add these scripts under `scripts`:
 ```json
 {
   "scripts": {
-    "pack:win": "npm run build && electron-builder --win --dir",
-    "installer:win": "npm run build && electron-builder --win nsis"
+    "pack:win": "npm run rebuild:native && npm run build && electron-builder --win --dir",
+    "installer:win": "npm run rebuild:native && npm run build && electron-builder --win nsis"
   }
 }
 ```
@@ -107,7 +107,8 @@ Unsigned installers trigger SmartScreen warnings. For production distribution:
 Use a CI job that runs:
 
 ```powershell
-npm ci
+npm ci --ignore-scripts
+npm run rebuild:native
 npm run build
 npm run installer:win
 ```

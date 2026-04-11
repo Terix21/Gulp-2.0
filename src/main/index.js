@@ -19,6 +19,20 @@ const extensionHost = require('./proxy/extension-host');
 const { registerProxyHandlers } = require('./proxy/proxy-ipc');
 const { registerBrowserHandlers } = require('./proxy/browser-ipc');
 
+function configureElectronStoragePaths() {
+  try {
+    app.setName('Sentinel');
+    const userDataRoot = path.join(app.getPath('appData'), 'Sentinel');
+    app.setPath('userData', userDataRoot);
+    app.setPath('sessionData', path.join(userDataRoot, 'Session'));
+    app.setPath('cache', path.join(userDataRoot, 'Cache'));
+  } catch {
+    // Fall back to Electron defaults when path overrides are unavailable.
+  }
+}
+
+configureElectronStoragePaths();
+
 let mainWindowRef = null;
 let shutdownInProgress = null;
 // browserHooks is set during app.whenReady() and used by createWindow/shutdownServices.
@@ -479,10 +493,35 @@ function createWindow () {
     }
   });
 
-  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    sendConsoleLog(
+      'error',
+      'renderer',
+      'Renderer failed to load',
+      `code=${code} mainFrame=${Boolean(isMainFrame)} url=${url || 'n/a'} reason=${description || 'unknown'}`,
+    );
+  });
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    let severity = 'info';
+    if (level === 1) {
+      severity = 'warn';
+    } else if (level === 2) {
+      severity = 'error';
+    } else if (level === 3) {
+      severity = 'debug';
+    }
+
+    sendConsoleLog(
+      severity,
+      'renderer',
+      message,
+      `source=${sourceId || 'unknown'} line=${Number.isFinite(line) ? line : 'n/a'}`,
+    );
+  });
   mainWindow.webContents.once('did-finish-load', () => {
     sendConsoleLog('info', 'app', 'Sentinel workspace loaded', `Electron ${process.versions.electron || 'unknown'} · Node ${process.versions.node || 'unknown'}`);
   });
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   mainWindow.on('resize', () => {
     if (browserHooks) browserHooks.syncHost();
   });

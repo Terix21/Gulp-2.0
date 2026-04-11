@@ -1,5 +1,5 @@
-const React = require('react');
-const {
+import React from 'react';
+import {
 	Badge,
 	Box,
 	Button,
@@ -10,10 +10,10 @@ const {
 	Separator,
 	Text,
 	VStack,
-} = require('@chakra-ui/react');
-const MonacoEditor = require('@monaco-editor/react').default;
-const { FixedSizeList } = require('react-window');
-const { getMonacoTheme, getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import MonacoEditor from '@monaco-editor/react';
+import { FixedSizeList } from 'react-window';
+import { getMonacoTheme, getStatusTextColor } from './theme-utils';
 
 const ROW_HEIGHT = 34;
 
@@ -354,4 +354,4 @@ function ProxyPanel({ themeId }) {
 	);
 }
 
-module.exports = ProxyPanel;
+export default ProxyPanel;
