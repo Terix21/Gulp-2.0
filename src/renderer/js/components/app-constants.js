@@ -36,4 +36,4 @@ const moduleDescriptions = {
   Extensions: 'Manage custom tools and extension-provided workflows.',
 };
 
-export { modules, moduleDescriptions };
+module.exports = { modules, moduleDescriptions };
