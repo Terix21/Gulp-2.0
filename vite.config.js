@@ -15,6 +15,20 @@ module.exports = defineConfig({
   build: {
     outDir: path.resolve(__dirname, 'dist', 'renderer'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Stable entry name expected by the post-build smoke test
+        entryFileNames: 'js/app.js',
+        chunkFileNames: 'js/[name].js',
+        // Route CSS to css/style.css and other assets to assets/
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name && assetInfo.name.endsWith('.css')) {
+            return 'css/style.css';
+          }
+          return 'assets/[name][extname]';
+        },
+      },
+    },
   },
   plugins: [
     react(),

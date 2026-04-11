@@ -5,7 +5,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('../theme', () => ({ default: { colors: { brand: { 50: '#eef6ff' } } } }));
 
 // Import the same constants App.jsx uses so this file cannot silently diverge.
-const { modules, moduleDescriptions } = require('../app-constants');
+import { modules, moduleDescriptions } from '../app-constants';
 
 // ---------------------------------------------------------------------------
 // TestApp — replicates App.jsx state logic using plain HTML (no Chakra).
