@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-const fs = require('fs');
+const fs = require('node:fs');
 
 const files = [
   'src/renderer/js/theme.js',
@@ -27,37 +27,37 @@ for (const file of files) {
   let code = orig;
 
   // const X = require('pkg').default; -> import X from 'pkg';
-  code = code.replace(
+  code = code.replaceAll(
     /^const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*require\('([^']+)'\)\.default\s*;/gm,
     (_, id, pkg) => `import ${id} from '${pkg}';`
   );
 
   // const { A, B } = require('pkg'); -> import { A, B } from 'pkg';
-  code = code.replace(
+  code = code.replaceAll(
     /^const\s+\{([^}]+)\}\s*=\s*require\('([^']+)'\)\s*;/gm,
     (_, bindings, pkg) => `import {${bindings}} from '${pkg}';`
   );
 
   // const X = require('pkg'); -> import X from 'pkg';
-  code = code.replace(
+  code = code.replaceAll(
     /^const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*require\('([^']+)'\)\s*;/gm,
     (_, id, pkg) => `import ${id} from '${pkg}';`
   );
 
   // module.exports = { A, B }; -> export { A, B };
-  code = code.replace(
+  code = code.replaceAll(
     /^module\.exports\s*=\s*\{([^}]+)\}\s*;/gm,
     (_, body) => `export {${body}};`
   );
 
   // module.exports = X; -> export default X;
-  code = code.replace(
+  code = code.replaceAll(
     /^module\.exports\s*=\s*([A-Za-z_$][A-Za-z0-9_$]+)\s*;/gm,
     (_, id) => `export default ${id};`
   );
 
   // Drop trailing module.exports.foo = ... synonym lines (export bridges added in debugging)
-  code = code.replace(/^module\.exports\.[^\n]+\n/gm, '');
+  code = code.replaceAll(/^module\.exports\.[^\n]+\n/gm, '');
 
   if (code !== orig) {
     fs.writeFileSync(file, code, 'utf8');
