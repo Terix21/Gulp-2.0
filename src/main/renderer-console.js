@@ -24,8 +24,8 @@ function normalizeRendererConsoleMessageArgs(args = []) {
     };
   }
 
-  // Single-arg or no-event shape: (payload) — detect by inspecting the first arg type
-  if (isRendererConsoleMessagePayload(eventOrPayload) && args.length <= 1) {
+  // Single-arg or no-event shape: (payload) — second arg already ruled out above; check first
+  if (isRendererConsoleMessagePayload(eventOrPayload)) {
     return {
       level: eventOrPayload.level,
       message: eventOrPayload.message,
