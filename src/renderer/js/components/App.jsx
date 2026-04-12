@@ -1244,7 +1244,8 @@ function App() {
               <Text fontSize='sm' color='fg.muted' fontFamily='body'>Workbench shell for concurrent security workflows.</Text>
             </Box>
             <HStack gap='3' wrap='wrap' justify='flex-end'>
-              <Badge 
+              <Badge
+                as='div'
                 variant='outline' 
                 color='fg.default'
                 borderColor='border.default'

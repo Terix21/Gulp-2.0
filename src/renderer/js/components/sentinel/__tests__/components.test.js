@@ -23,8 +23,8 @@ function renderWithChakra(ui) {
   return render(React.createElement(ChakraProvider, { value: defaultSystem }, ui));
 }
 
-const originalResizeObserver = global.ResizeObserver;
-const originalSentinel = global.window ? global.window.sentinel : undefined;
+const originalResizeObserver = globalThis.ResizeObserver;
+const originalSentinel = globalThis.window ? globalThis.window.sentinel : undefined;
 
 function createBrowserApi() {
   return {
@@ -108,21 +108,26 @@ function createBrowserApi() {
 
 describe('Sentinel UI Panel Components', () => {
   beforeEach(() => {
-    global.ResizeObserver = class {
-      observe() {}
-      disconnect() {}
+    globalThis.ResizeObserver = class {
+      observe() {
+        return undefined;
+      }
+
+      disconnect() {
+        return undefined;
+      }
     };
   });
 
   afterEach(() => {
-    if (global.window) {
-      if (typeof originalSentinel === 'undefined') {
-        delete global.window.sentinel;
+    if (globalThis.window) {
+      if (originalSentinel === undefined) {
+        delete globalThis.window.sentinel;
       } else {
-        global.window.sentinel = originalSentinel;
+        globalThis.window.sentinel = originalSentinel;
       }
     }
-    global.ResizeObserver = originalResizeObserver;
+    globalThis.ResizeObserver = originalResizeObserver;
     vi.restoreAllMocks();
   });
 
@@ -267,7 +272,7 @@ describe('Sentinel UI Panel Components', () => {
 
     it('loads sessions, syncs bounds, and drives browser controls through preload API', async () => {
       const browserApi = createBrowserApi();
-      window.sentinel = { browser: browserApi };
+      globalThis.window.sentinel = { browser: browserApi };
 
       const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({
         left: 11,

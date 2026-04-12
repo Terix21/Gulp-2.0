@@ -269,7 +269,6 @@ function CompareView(props) {
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send A</Text>
 					<Box
 						as='select'
-						size='xs'
 						value={idA}
 						onChange={e => setIdA(e.target.value)}
 						color='fg.default'
@@ -290,7 +289,6 @@ function CompareView(props) {
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send B</Text>
 					<Box
 						as='select'
-						size='xs'
 						value={idB}
 						onChange={e => setIdB(e.target.value)}
 						color='fg.default'
