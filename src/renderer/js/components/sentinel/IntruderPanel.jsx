@@ -93,7 +93,7 @@ function estimateSourceCount(source) {
 
   if (source.type === 'dictionary') {
     if (source.filePath) {
-      return Number.NaN;
+        return null;
     }
     return String(source.text || '')
       .split(/\r?\n/g)
@@ -129,7 +129,7 @@ function estimateSourceCount(source) {
 function estimateAttackTotal(attackType, sources) {
   const counts = sources
     .map(source => estimateSourceCount(source))
-    .filter(count => Number.isFinite(count));
+    .filter(count => count !== null && Number.isFinite(count));
   if (counts.length === 0) {
     return 'unknown';
   }

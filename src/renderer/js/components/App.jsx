@@ -1091,23 +1091,9 @@ function App() {
     fontSize: 'xs',
     fontFamily: 'mono'
   };
-  let settingsOverlayScrim;
-  if (getOverlayScrim) {
-    settingsOverlayScrim = getOverlayScrim(selectedThemeId);
-  } else if (activeTheme.mode === 'dark') {
-    settingsOverlayScrim = 'rgba(5, 10, 16, 0.68)';
-  } else {
-    settingsOverlayScrim = 'rgba(20, 28, 36, 0.20)';
-  }
+  const settingsOverlayScrim = getOverlayScrim(selectedThemeId);
 
-  let commandPaletteOverlayScrim;
-  if (getOverlayScrim) {
-    commandPaletteOverlayScrim = getOverlayScrim(selectedThemeId);
-  } else if (activeTheme.mode === 'dark') {
-    commandPaletteOverlayScrim = 'rgba(5, 10, 16, 0.65)';
-  } else {
-    commandPaletteOverlayScrim = 'rgba(20, 28, 36, 0.18)';
-  }
+  const commandPaletteOverlayScrim = getOverlayScrim(selectedThemeId);
 
   return (
     <Flex h='100vh' overflow='hidden' bg='bg.canvas' color='fg.default' direction='row' fontFamily='body'>

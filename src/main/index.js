@@ -18,6 +18,7 @@ const decoderService = require('./proxy/decoder-service');
 const extensionHost = require('./proxy/extension-host');
 const { registerProxyHandlers } = require('./proxy/proxy-ipc');
 const { registerBrowserHandlers } = require('./proxy/browser-ipc');
+const { mapRendererConsoleSeverity } = require('./renderer-console');
 
 function configureElectronStoragePaths() {
   try {
@@ -479,38 +480,6 @@ function registerCaHandlers() {
     const guidance = caManager.getTrustInstallGuidance();
     return { guidance };
   });
-}
-
-function mapRendererConsoleSeverity(level) {
-  if (typeof level === 'number' && Number.isFinite(level)) {
-    switch (level) {
-      case 0:
-        return 'debug';
-      case 2:
-        return 'warn';
-      case 3:
-        return 'error';
-      default:
-        return 'info';
-    }
-  }
-
-  const normalizedLevel = String(level || '').trim().toLowerCase();
-  if (normalizedLevel === 'warning' || normalizedLevel === 'warn') {
-    return 'warn';
-  }
-  if (normalizedLevel === 'error') {
-    return 'error';
-  }
-  if (
-    normalizedLevel === 'debug'
-    || normalizedLevel === 'verbose'
-    || normalizedLevel === 'trace'
-  ) {
-    return 'debug';
-  }
-
-  return 'info';
 }
 
 function normalizeRendererConsoleMessageArgs(args = []) {

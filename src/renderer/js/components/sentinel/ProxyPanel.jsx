@@ -170,6 +170,11 @@ function ProxyPanel(props) {
 	const [inspectorTab, setInspectorTab] = React.useState('raw');
 	const queueRef = React.useRef([]);
 
+	const setQueueAndRef = React.useCallback((nextQueue) => {
+		queueRef.current = nextQueue;
+		setQueue(nextQueue);
+	}, []);
+
 	React.useEffect(() => {
 		queueRef.current = queue;
 	}, [queue]);
@@ -204,8 +209,7 @@ function ProxyPanel(props) {
 				return;
 			}
 			const nextQueue = enqueueRequest(queueRef.current, request);
-			queueRef.current = nextQueue;
-			setQueue(nextQueue);
+			setQueueAndRef(nextQueue);
 		});
 
 		const unsubscribeResponse = proxyApi.intercept.onResponse((response) => {
@@ -214,8 +218,7 @@ function ProxyPanel(props) {
 			}
 
 			const nextQueue = removeQueueRequest(queueRef.current, response.requestId);
-			queueRef.current = nextQueue;
-			setQueue(nextQueue);
+			setQueueAndRef(nextQueue);
 			setSelectedId(prev => (prev === response.requestId ? '' : prev));
 		});
 
@@ -241,7 +244,7 @@ function ProxyPanel(props) {
 				unsubscribeError();
 			}
 		};
-	}, []);
+	}, [setQueueAndRef]);
 
 	React.useEffect(() => {
 		if (!selected) {
@@ -318,7 +321,8 @@ function ProxyPanel(props) {
 					body: editBody,
 				},
 			});
-			setQueue(prev => prev.filter(item => item.id !== selected.id));
+			const afterForward = queueRef.current.filter(item => item.id !== selected.id);
+			setQueueAndRef(afterForward);
 			setSelectedId('');
 			setNoticeText('Forwarded selected request.');
 		} catch {
@@ -336,7 +340,8 @@ function ProxyPanel(props) {
 		setNoticeText('');
 		try {
 			await proxyApi.intercept.drop({ requestId: selected.id });
-			setQueue(prev => prev.filter(item => item.id !== selected.id));
+			const afterDrop = queueRef.current.filter(item => item.id !== selected.id);
+			setQueueAndRef(afterDrop);
 			setSelectedId('');
 			setNoticeText('Dropped selected request.');
 		} catch {
