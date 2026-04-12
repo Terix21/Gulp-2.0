@@ -303,7 +303,7 @@ describe('Sentinel UI Panel Components', () => {
         url: 'https://sentinel.test',
       }));
 
-      fireEvent.click(screen.getByRole('button', { name: '↻' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
       await waitFor(() => expect(browserApi.reload).toHaveBeenCalledWith({ sessionId: 'sess-1' }));
 
       rectSpy.mockRestore();
