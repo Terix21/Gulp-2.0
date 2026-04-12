@@ -472,7 +472,11 @@ function ConsoleDrawer(props) {
     onExport,
   } = props;
   const levelColor = { info: theme.colors.fgDefault, warn: 'orange.600', error: 'red.600' };
-  const levelBg = { info: 'transparent', warn: 'orange.500/10', error: 'red.500/10' };
+  const levelBg = {
+    info: 'transparent',
+    warn: 'rgba(221, 107, 32, 0.10)',
+    error: 'rgba(229, 62, 62, 0.10)'
+  };
   const filteredLogs = filter === 'all' ? logs : logs.filter(e => e.level === filter);
   return (
     <Box
@@ -1087,6 +1091,23 @@ function App() {
     fontSize: 'xs',
     fontFamily: 'mono'
   };
+  let settingsOverlayScrim;
+  if (getOverlayScrim) {
+    settingsOverlayScrim = getOverlayScrim(selectedThemeId);
+  } else if (activeTheme.mode === 'dark') {
+    settingsOverlayScrim = 'rgba(5, 10, 16, 0.68)';
+  } else {
+    settingsOverlayScrim = 'rgba(20, 28, 36, 0.20)';
+  }
+
+  let commandPaletteOverlayScrim;
+  if (getOverlayScrim) {
+    commandPaletteOverlayScrim = getOverlayScrim(selectedThemeId);
+  } else if (activeTheme.mode === 'dark') {
+    commandPaletteOverlayScrim = 'rgba(5, 10, 16, 0.65)';
+  } else {
+    commandPaletteOverlayScrim = 'rgba(20, 28, 36, 0.18)';
+  }
 
   return (
     <Flex h='100vh' overflow='hidden' bg='bg.canvas' color='fg.default' direction='row' fontFamily='body'>
@@ -1342,7 +1363,7 @@ function App() {
         <Flex
           position='fixed'
           inset='0'
-          bg={getOverlayScrim ? getOverlayScrim(selectedThemeId) : (activeTheme.mode === 'dark' ? 'rgba(5, 10, 16, 0.68)' : 'rgba(20, 28, 36, 0.20)')}
+          bg={settingsOverlayScrim}
           justify='flex-end'
           zIndex='1050'
           role='presentation'
@@ -1508,7 +1529,7 @@ function App() {
         <Flex
           position='fixed'
           inset='0'
-          bg={getOverlayScrim ? getOverlayScrim(selectedThemeId) : (activeTheme.mode === 'dark' ? 'rgba(5, 10, 16, 0.65)' : 'rgba(20, 28, 36, 0.18)')}
+          bg={commandPaletteOverlayScrim}
           align='flex-start'
           justify='center'
           pt='16'

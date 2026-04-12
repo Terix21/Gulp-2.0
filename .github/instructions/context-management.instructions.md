@@ -1,7 +1,7 @@
 # Context Management Instructions
 
 ## Scope
-Workspace context loading and review discipline for Electron + Gulp + React.
+Workspace context loading and review discipline for Electron + Vite + React.
 
 ## Conventions
 - Load the top-level copilot instructions first, then matching framework files.

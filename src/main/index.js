@@ -481,6 +481,61 @@ function registerCaHandlers() {
   });
 }
 
+function mapRendererConsoleSeverity(level) {
+  if (typeof level === 'number' && Number.isFinite(level)) {
+    switch (level) {
+      case 0:
+        return 'debug';
+      case 2:
+        return 'warn';
+      case 3:
+        return 'error';
+      default:
+        return 'info';
+    }
+  }
+
+  const normalizedLevel = String(level || '').trim().toLowerCase();
+  if (normalizedLevel === 'warning' || normalizedLevel === 'warn') {
+    return 'warn';
+  }
+  if (normalizedLevel === 'error') {
+    return 'error';
+  }
+  if (
+    normalizedLevel === 'debug'
+    || normalizedLevel === 'verbose'
+    || normalizedLevel === 'trace'
+  ) {
+    return 'debug';
+  }
+
+  return 'info';
+}
+
+function normalizeRendererConsoleMessageArgs(args = []) {
+  const [eventOrPayload, level, message, line, sourceId] = args;
+  const usingLegacySignature = args.length > 1;
+  if (usingLegacySignature) {
+    return {
+      level,
+      message,
+      line,
+      sourceId,
+    };
+  }
+
+  const payload = eventOrPayload && typeof eventOrPayload === 'object'
+    ? eventOrPayload
+    : {};
+  return {
+    level: payload.level,
+    message: payload.message,
+    line: Number.isFinite(payload.lineNumber) ? payload.lineNumber : payload.line,
+    sourceId: payload.sourceId,
+  };
+}
+
 function createWindow () {
   const mainWindow = new BrowserWindow({
     width: 800,
@@ -501,25 +556,19 @@ function createWindow () {
       `code=${code} mainFrame=${Boolean(isMainFrame)} url=${url || 'n/a'} reason=${description || 'unknown'}`,
     );
   });
-  mainWindow.webContents.on('console-message', (event) => {
-    const level = event.level;
-    const message = event.message;
-    const line = Number.isFinite(event.lineNumber) ? event.lineNumber : event.line;
-    const sourceId = event.sourceId;
-
-    let severity = 'info';
-    if (level === 'warning' || level === 'warn') {
-      severity = 'warn';
-    } else if (level === 'error') {
-      severity = 'error';
-    } else if (level === 'debug' || level === 'verbose') {
-      severity = 'debug';
-    }
+  mainWindow.webContents.on('console-message', (...args) => {
+    const {
+      level,
+      message,
+      line,
+      sourceId,
+    } = normalizeRendererConsoleMessageArgs(args);
+    const severity = mapRendererConsoleSeverity(level);
 
     sendConsoleLog(
       severity,
       'renderer',
-      message,
+      String(message || ''),
       `source=${sourceId || 'unknown'} line=${Number.isFinite(line) ? line : 'n/a'}`,
     );
   });

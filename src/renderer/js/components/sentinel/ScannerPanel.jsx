@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
   Badge,
   Box,
@@ -13,8 +14,51 @@ import {
 } from '@chakra-ui/react';
 import { getStatusTextColor } from './theme-utils';
 
-function ScannerPanel({ themeId }) {
-  const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
+function getSeverityBadgeStyle(severity) {
+  if (severity === 'critical' || severity === 'high') {
+    return { borderColor: 'red.500', bg: 'rgba(239,68,68,0.1)' };
+  }
+  if (severity === 'medium') {
+    return { borderColor: 'orange.500', bg: 'rgba(249,115,22,0.1)' };
+  }
+  if (severity === 'low') {
+    return { borderColor: 'yellow.500', bg: 'rgba(234,179,8,0.1)' };
+  }
+  return { borderColor: 'blue.500', bg: 'rgba(59,130,246,0.1)' };
+}
+
+function renderFindingCard(finding, index) {
+  const severityStyle = getSeverityBadgeStyle(finding.severity);
+  const key = finding.id || `${finding.name}-${index}`;
+  const hasEvidence = Boolean(finding.evidence);
+
+  return (
+    <Box key={key} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
+      <HStack justify='space-between'>
+        <Text fontWeight='medium' color='fg.default'>{finding.name || 'Finding'}</Text>
+        <Badge
+          variant='outline'
+          color='var(--sentinel-fg-default)'
+          borderColor={severityStyle.borderColor}
+          bg={severityStyle.bg}
+        >
+          {finding.severity || 'info'}
+        </Badge>
+      </HStack>
+      <Text fontSize='sm' color='fg.muted'>{finding.description || 'No description provided.'}</Text>
+      {hasEvidence ? (
+        <Text fontSize='xs' color='fg.muted'>
+          Evidence: <Code color='fg.default' bg='bg.subtle'>{finding.evidence.method || 'GET'}</Code> <Code color='fg.default' bg='bg.subtle'>{finding.evidence.path || '/'}</Code>{' '}
+          <Code color='fg.default' bg='bg.subtle'>{String(finding.evidence.statusCode || '')}</Code>
+        </Text>
+      ) : null}
+    </Box>
+  );
+}
+
+function ScannerPanel(props) {
+  const themeId = props.themeId;
+  const sentinel = globalThis?.window?.sentinel || null;
   const [targetsText, setTargetsText] = React.useState('https://example.com/search');
   const [scopeHosts, setScopeHosts] = React.useState('');
   const [historyIds, setHistoryIds] = React.useState('');
@@ -25,35 +69,35 @@ function ScannerPanel({ themeId }) {
   const [errorText, setErrorText] = React.useState('');
 
   const parseTextList = React.useCallback((value) => {
-    return String(value || '')
+    return String(value ?? '')
       .split(/[\n,]/g)
       .map(item => item.trim())
       .filter(Boolean);
   }, []);
 
   const loadResults = React.useCallback(async (scanId) => {
-    if (!sentinel || !sentinel.scanner || !scanId) {
+    if (!sentinel?.scanner || !scanId) {
       return;
     }
     const result = await sentinel.scanner.results({ scanId, page: 0, pageSize: 500 });
-    setFindings(Array.isArray(result.findings) ? result.findings : []);
+    setFindings(Array.isArray(result?.findings) ? result.findings : []);
   }, [sentinel]);
 
   React.useEffect(() => {
-    if (!sentinel || !sentinel.scanner || !sentinel.scanner.onProgress) {
+    if (typeof sentinel?.scanner?.onProgress !== 'function') {
       return undefined;
     }
 
     const unsubscribe = sentinel.scanner.onProgress((payload) => {
-      if (!payload || !payload.scanId) {
+      if (!payload?.scanId) {
         return;
       }
       if (payload.scanId !== activeScanId && payload.scanId !== 'passive') {
         return;
       }
 
-      setStatusText(`Progress: ${payload.pct || 0}%`);
-      if (payload.finding) {
+      setStatusText(`Progress: ${payload.pct ?? 0}%`);
+      if (payload?.finding) {
         setFindings(prev => [payload.finding, ...prev]);
       }
     });
@@ -62,7 +106,7 @@ function ScannerPanel({ themeId }) {
   }, [activeScanId, sentinel]);
 
   async function startActiveScan() {
-    if (!sentinel || !sentinel.scanner) {
+    if (!sentinel?.scanner) {
       return;
     }
 
@@ -82,7 +126,7 @@ function ScannerPanel({ themeId }) {
       await loadResults(started.scanId);
       setStatusText(`Active scan completed: ${started.scanId}`);
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to start scanner job.');
+      setErrorText(error?.message || 'Unable to start scanner job.');
       setStatusText('Scanner failed');
     } finally {
       setLoading(false);
@@ -90,7 +134,7 @@ function ScannerPanel({ themeId }) {
   }
 
   async function loadPassiveFindings() {
-    if (!sentinel || !sentinel.scanner) {
+    if (!sentinel?.scanner) {
       return;
     }
 
@@ -101,11 +145,16 @@ function ScannerPanel({ themeId }) {
       await loadResults('passive');
       setStatusText('Loaded passive findings from captured traffic.');
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to load passive findings.');
+      setErrorText(error?.message || 'Unable to load passive findings.');
     } finally {
       setLoading(false);
     }
   }
+
+  const hasFindings = findings.length > 0;
+  const findingsContent = hasFindings
+    ? findings.map((finding, index) => renderFindingCard(finding, index))
+    : <Text fontSize='sm' color='fg.muted'>No findings loaded yet.</Text>;
 
   return (
     <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default'>
@@ -148,38 +197,7 @@ function ScannerPanel({ themeId }) {
             <Text fontWeight='semibold' fontSize='sm' color='fg.default'>Findings</Text>
             <Code color='fg.default' bg='bg.subtle'>{findings.length}</Code>
           </HStack>
-          {findings.length === 0 ? (
-            <Text fontSize='sm' color='fg.muted'>No findings loaded yet.</Text>
-          ) : findings.map((finding, index) => (
-            <Box key={finding.id || `${finding.name}-${index}`} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
-              <HStack justify='space-between'>
-                <Text fontWeight='medium' color='fg.default'>{finding.name || 'Finding'}</Text>
-                <Badge 
-                  variant='outline'
-                  color='var(--sentinel-fg-default)'
-                  borderColor={
-                    finding.severity === 'critical' || finding.severity === 'high' ? 'red.500'
-                    : finding.severity === 'medium' ? 'orange.500'
-                    : finding.severity === 'low' ? 'yellow.500' : 'blue.500'
-                  }
-                  bg={
-                    finding.severity === 'critical' || finding.severity === 'high' ? 'rgba(239,68,68,0.1)'
-                    : finding.severity === 'medium' ? 'rgba(249,115,22,0.1)'
-                    : finding.severity === 'low' ? 'rgba(234,179,8,0.1)' : 'rgba(59,130,246,0.1)'
-                  }
-                >
-                  {finding.severity || 'info'}
-                </Badge>
-              </HStack>
-              <Text fontSize='sm' color='fg.muted'>{finding.description || 'No description provided.'}</Text>
-              {finding.evidence ? (
-                <Text fontSize='xs' color='fg.muted'>
-                  Evidence: <Code color='fg.default' bg='bg.subtle'>{finding.evidence.method || 'GET'}</Code> <Code color='fg.default' bg='bg.subtle'>{finding.evidence.path || '/'}</Code>{' '}
-                  <Code color='fg.default' bg='bg.subtle'>{String(finding.evidence.statusCode || '')}</Code>
-                </Text>
-              ) : null}
-            </Box>
-          ))}
+          {findingsContent}
         </Box>
 
         <Text fontSize='sm' color={getStatusTextColor('info', themeId)}>{statusText}</Text>
@@ -188,5 +206,9 @@ function ScannerPanel({ themeId }) {
     </Box>
   );
 }
+
+ScannerPanel.propTypes = {
+  themeId: PropTypes.string,
+};
 
 export default ScannerPanel;

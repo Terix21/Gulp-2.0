@@ -19,7 +19,7 @@ react
 ## Pitfalls
 - Do not bypass React with direct DOM mutation for component-managed UI.
 - Do not introduce renderer-side privileged access; use preload bridges only.
-- Ensure Gulp bundling includes `.jsx` and module imports.
+- Ensure Vite bundling includes `.jsx` and module imports.
 
 ## Append-Only Updates
 
@@ -76,3 +76,17 @@ react
 ### Theme System: Root data-theme Verification (2026-04-11)
 - After `applyThemeToDocument` runs, confirm `document.documentElement.dataset.theme` equals `'dark'` or `'light'`. Chakra's `colorMode` must be kept in sync with this value if Chakra's `useColorModeValue` hook is used anywhere — do not mix independent color-mode states.
 - If a component uses `useColorModeValue`, ensure `initialColorMode` in `ChakraProvider` is driven from the same `getInitialThemeId()` result that `applyThemeToDocument` uses.
+
+### Renderer API Access and Guard Style (2026-04-11)
+- In renderer components/hooks, use `globalThis.window` (or `globalThis` APIs directly) instead of bare `window` references.
+- Use optional chaining for capability checks and payload reads (`api?.method`, `result?.field`) instead of repetitive `&&` chains.
+- For error fallback text, prefer `error?.message || 'fallback'` for concise, readable handling.
+
+### Renderer Lint Baseline: Panel Components (2026-04-11)
+- Add `propTypes` for every component in `src/renderer/js/components/**`, including child/table/viewer components, not only top-level panels.
+- When props include structured data, define nested `PropTypes.shape(...)` contracts for accessed fields (for example `item.request`, `item.response`, `table.getRowModel`, `table.getFlatHeaders`, callback props like `onSelect`, `onSendToRepeater`, `onSendToIntruder`).
+- Avoid nested ternary expressions in JSX and logic; compute an intermediate variable with `if/else` or a lookup map before rendering.
+- Prefer optional chaining (`item?.request`, `table?.getRowModel?.()`) over `a && a.b` guard chains.
+- Remove unused state setters and dead helpers immediately (`setPageSize`-style leftovers) to keep components warning-free.
+- Keep component-internal nesting shallow; extract deeply nested callbacks/helpers to top-level utility functions when depth exceeds 4 levels.
+- Keep pure helper functions (for example filter builders and match predicates) at module scope unless they rely on component-local closure state.

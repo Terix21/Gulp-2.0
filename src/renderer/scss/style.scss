@@ -11,15 +11,16 @@ body {
   font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
 }
 
-/* Bind Monaco Editor backgrounds to the Sentinel theme variable contract within the app shell */
+/* Bind Monaco Editor backgrounds to the Sentinel theme variable contract within the app shell. */
 #root .monaco-editor,
 #root .monaco-editor-background,
 #root .monaco-editor .margin {
   background-color: var(--sentinel-bg-surface);
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+[data-theme='dark'] ::-webkit-scrollbar { width: 6px; height: 6px; }
 [data-theme='dark'] ::-webkit-scrollbar-track { background: var(--sentinel-bg-canvas); }
 [data-theme='dark'] ::-webkit-scrollbar-thumb { background: var(--sentinel-border-subtle); border-radius: 3px; }
+[data-theme='light'] ::-webkit-scrollbar { width: 6px; height: 6px; }
 [data-theme='light'] ::-webkit-scrollbar-track { background: var(--sentinel-bg-subtle); }
 [data-theme='light'] ::-webkit-scrollbar-thumb { background: var(--sentinel-border-default); border-radius: 3px; }

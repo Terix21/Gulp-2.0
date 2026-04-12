@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
   Box,
   Button,
@@ -21,7 +22,8 @@ function splitCsvList(value) {
     .filter(Boolean);
 }
 
-function ExtensionsPanel({ themeId }) {
+function ExtensionsPanel(props) {
+  const { themeId } = props;
   const [extensions, setExtensions] = React.useState([]);
   const [auditLog, setAuditLog] = React.useState([]);
   const [extensionsDir, setExtensionsDir] = React.useState('');
@@ -34,18 +36,19 @@ function ExtensionsPanel({ themeId }) {
   const [permissionsText, setPermissionsText] = React.useState('proxy.intercept.read,audit.write');
 
   const refresh = React.useCallback(async () => {
-    if (!window.sentinel || !window.sentinel.extensions || typeof window.sentinel.extensions.list !== 'function') {
+    const extensionsApi = globalThis?.window?.sentinel?.extensions;
+    if (typeof extensionsApi?.list !== 'function') {
       return;
     }
 
     try {
-      const result = await window.sentinel.extensions.list();
-      setExtensions(Array.isArray(result && result.extensions) ? result.extensions : []);
-      setAuditLog(Array.isArray(result && result.auditLog) ? result.auditLog : []);
-      setExtensionsDir(String((result && result.extensionsDir) || ''));
+      const result = await extensionsApi.list();
+      setExtensions(Array.isArray(result?.extensions) ? result.extensions : []);
+      setAuditLog(Array.isArray(result?.auditLog) ? result.auditLog : []);
+      setExtensionsDir(String(result?.extensionsDir || ''));
       setErrorText('');
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Failed to load extension state.');
+      setErrorText(error?.message || 'Failed to load extension state.');
     }
   }, []);
 
@@ -54,7 +57,8 @@ function ExtensionsPanel({ themeId }) {
   }, [refresh]);
 
   const installExtension = async () => {
-    if (!window.sentinel || !window.sentinel.extensions || typeof window.sentinel.extensions.install !== 'function') {
+    const extensionsApi = globalThis?.window?.sentinel?.extensions;
+    if (typeof extensionsApi?.install !== 'function') {
       return;
     }
 
@@ -73,48 +77,52 @@ function ExtensionsPanel({ themeId }) {
         };
 
     try {
-      const result = await window.sentinel.extensions.install(args);
-      if (!result || !result.ok) {
-        setErrorText(result && result.error ? result.error : 'Install failed.');
-      } else {
+      const result = await extensionsApi.install(args);
+      if (result?.ok) {
         setErrorText('');
+      } else {
+        setErrorText(result?.error || 'Install failed.');
       }
       await refresh();
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Install failed.');
+      setErrorText(error?.message || 'Install failed.');
     }
   };
 
   const uninstallExtension = async (id) => {
-    if (!window.sentinel || !window.sentinel.extensions || typeof window.sentinel.extensions.uninstall !== 'function') {
+    const extensionsApi = globalThis?.window?.sentinel?.extensions;
+    if (typeof extensionsApi?.uninstall !== 'function') {
       return;
     }
 
     try {
-      const result = await window.sentinel.extensions.uninstall({ id });
-      if (!result || !result.ok) {
-        setErrorText(result && result.error ? result.error : 'Uninstall failed.');
+      const result = await extensionsApi.uninstall({ id });
+      if (!result?.ok) {
+        setErrorText(result?.error || 'Uninstall failed.');
         return;
       }
 
       setErrorText('');
       await refresh();
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Uninstall failed.');
+      setErrorText(error?.message || 'Uninstall failed.');
     }
   };
 
   const toggleExtension = async (id, enabled) => {
-    if (!window.sentinel || !window.sentinel.extensions || typeof window.sentinel.extensions.toggle !== 'function') {
+    const extensionsApi = globalThis?.window?.sentinel?.extensions;
+    if (typeof extensionsApi?.toggle !== 'function') {
       return;
     }
 
+    const action = enabled ? 'enable' : 'disable';
+
     try {
-      const result = await window.sentinel.extensions.toggle({ id, enabled });
-      if (result && result.ok === false) {
+      const result = await extensionsApi.toggle({ id, enabled });
+      if (result?.ok === false) {
         setErrorText(
           result.error ||
-          `Failed to ${enabled ? 'enable' : 'disable'} extension.`
+          `Failed to ${action} extension.`
         );
         return;
       }
@@ -122,11 +130,7 @@ function ExtensionsPanel({ themeId }) {
       setErrorText('');
       await refresh();
     } catch (error) {
-      setErrorText(
-        error && error.message
-          ? error.message
-          : `Failed to ${enabled ? 'enable' : 'disable'} extension.`
-      );
+      setErrorText(error?.message || `Failed to ${action} extension.`);
     }
   };
 
@@ -277,5 +281,9 @@ function ExtensionsPanel({ themeId }) {
     </Box>
   );
 }
+
+ExtensionsPanel.propTypes = {
+  themeId: PropTypes.string,
+};
 
 export default ExtensionsPanel;

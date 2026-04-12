@@ -66,6 +66,15 @@ Project documentation now lives under `instructions/`:
 - `npm run test:coverage` -> coverage run
 - `npm run test:build` -> clean + build + post-build smoke validation
 
+## Pre-PR Lint Checklist
+- Run `npm run build` and `npm test` before opening the PR.
+- In renderer code, prefer `globalThis.window` / `globalThis.document` over bare globals.
+- Use optional chaining (`?.`) instead of chained `&&` guard access.
+- Define `propTypes` for every component, including nested object fields and callback props.
+- Extract nested ternary expressions into independent statements or lookup variables.
+- Remove unused state setters, locals, and dead helper functions.
+- Prefer `String#codePointAt()` over `String#charCodeAt()`.
+
 ## Security Notes
 - Keep renderer free of direct Node.js imports.
 - Expose privileged operations only through `src/main/preload.js`.

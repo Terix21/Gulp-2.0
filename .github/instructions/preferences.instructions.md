@@ -35,3 +35,10 @@ Repository-level coding and review preferences.
 - 2026-04-11: `color-scheme` on `<html>` must match theme mode (`light`/`dark`); `applyThemeToDocument` owns this via `root.style.colorScheme`. Never hardcode `color-scheme: dark` in global CSS for themes that also support light variants.
 - 2026-04-11: Before merging any styling change, verify contrast ratios for the **Dark Circuit** theme (neon-on-dark) against WCAG AA (4.5:1 body text, 3:1 large/UI). It is the highest-risk theme for small-text failures.
 - 2026-04-11: Search for `!important` on `color`, `background`, or `background-color` properties before adding new CSS rules. Existing `!important` flags shadow theme-variable overrides and must be removed or scoped before theme switching will work reliably.
+- 2026-04-11: In renderer code, prefer `globalThis` access (`globalThis.window`, `globalThis.document`) over direct `window`/`document` globals to satisfy lint rules and keep runtime guards explicit.
+- 2026-04-11: Prefer optional chaining and nullish-safe access (`obj?.prop`, `err?.message || fallback`) over chained `&&` guards for API checks and error-message fallbacks.
+- 2026-04-11: String character-code access in new/modified code must use `String#codePointAt()` instead of `String#charCodeAt()` to avoid Unicode surrogate-pair errors.
+- 2026-04-11: Treat all `react/prop-types` findings as required fixes in renderer components: define `propTypes` for every component and use explicit nested shapes for objects consumed in JSX/logic (for example `item.request`, `item.response`, table adapters and callback props).
+- 2026-04-11: Do not leave unused state setters, locals, or helper functions (`setX` values from `useState`, dead callbacks, orphaned utility functions). Remove them in the same change where they become unused.
+- 2026-04-11: Extract nested ternary expressions into independent statements/variables before render or before use in logic; avoid chained ternaries in JSX props and status/style selection.
+- 2026-04-11: Keep helper functions that do not need closure state at module scope (outside React component bodies) to reduce cognitive complexity and nested-function depth.

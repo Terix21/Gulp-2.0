@@ -60,7 +60,7 @@
 - Keep `src/main/` for Electron main/preload code and `src/renderer/` for browser UI code.
 - Keep React renderer entry in `src/renderer/js/main.jsx` and components in `src/renderer/js/components/`.
 - Wrap renderer root with `ChakraProvider` and prefer Chakra primitives in component UI.
-- Prefer small, named functions for Gulp tasks and Electron lifecycle setup.
+- Prefer small, named functions for build/runtime setup and Electron lifecycle wiring.
 - Keep semicolon usage and single-quote string style consistent with existing files.
 
 ## Electron Safety Rules

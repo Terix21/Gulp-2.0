@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
 	Badge,
 	Box,
@@ -17,48 +18,148 @@ import { getMonacoTheme, getStatusTextColor } from './theme-utils';
 
 const ROW_HEIGHT = 34;
 
-function buildRawRequest(request = {}, pathOverride, bodyOverride) {
-	const headers = Object.entries(request.headers || {})
+function buildRawRequest(pathOverride, bodyOverride, request = {}) {
+	const safeRequest = request;
+	const headers = Object.entries(safeRequest.headers || {})
 		.map(([key, value]) => `${key}: ${value}`)
 		.join('\n');
+	let renderedBody = safeRequest.body || '';
+	if (bodyOverride !== undefined && bodyOverride !== null) {
+		renderedBody = bodyOverride;
+	}
+	const renderedPath = pathOverride || safeRequest.path || '/';
 	return [
-		`${request.method || 'GET'} ${pathOverride || request.path || '/'} ${request.protocol || 'HTTP/1.1'}`,
+		`${safeRequest.method || 'GET'} ${renderedPath} ${safeRequest.protocol || 'HTTP/1.1'}`,
 		headers,
 		'',
-		bodyOverride != null ? bodyOverride : (request.body || ''),
+		renderedBody,
 	].join('\n');
 }
 
-function ProxyQueue({ queue, selectedId, onSelect }) {
+function enqueueRequest(previousQueue, request) {
+	if (previousQueue.some(item => item.id === request.id)) {
+		return previousQueue;
+	}
+	return [request, ...previousQueue];
+}
+
+function removeQueueRequest(previousQueue, requestId) {
+	return previousQueue.filter(item => item.id !== requestId);
+}
+
+function ProxyQueue(props) {
+	const { queue, selectedId, onSelect } = props;
+	const renderRow = ({ index, style }) => {
+		const item = queue[index];
+		const isSelected = item.id === selectedId;
+		return (
+			<Flex
+				style={style}
+				px='2'
+				align='center'
+				bg={isSelected ? 'bg.subtle' : 'transparent'}
+				borderBottomWidth='1px'
+				borderColor='border.default'
+				fontFamily='mono'
+				fontSize='xs'
+				cursor='pointer'
+				onClick={() => onSelect(item.id)}
+			>
+				<Box flex='0 0 64px' px='2'>{item.method || 'GET'}</Box>
+				<Box flex='0 0 180px' px='2' overflow='hidden' textOverflow='ellipsis' whiteSpace='nowrap'>{item.host || 'unknown-host'}</Box>
+				<Box flex='1' px='2' overflow='hidden' textOverflow='ellipsis' whiteSpace='nowrap'>{item.path || '/'}</Box>
+			</Flex>
+		);
+	};
+
 	return (
 		<FixedSizeList height={420} itemCount={queue.length} itemSize={ROW_HEIGHT} width='100%'>
-			{({ index, style }) => {
-				const item = queue[index];
-				const isSelected = item.id === selectedId;
-				return (
-					<Flex
-						style={style}
-						px='2'
-						align='center'
-						bg={isSelected ? 'bg.subtle' : 'transparent'}
-						borderBottomWidth='1px'
-						borderColor='border.default'
-						fontFamily='mono'
-						fontSize='xs'
-						cursor='pointer'
-						onClick={() => onSelect(item.id)}
-					>
-						<Box flex='0 0 64px' px='2'>{item.method || 'GET'}</Box>
-						<Box flex='0 0 180px' px='2' overflow='hidden' textOverflow='ellipsis' whiteSpace='nowrap'>{item.host || 'unknown-host'}</Box>
-						<Box flex='1' px='2' overflow='hidden' textOverflow='ellipsis' whiteSpace='nowrap'>{item.path || '/'}</Box>
-					</Flex>
-				);
-			}}
+			{renderRow}
 		</FixedSizeList>
 	);
 }
 
-function ProxyPanel({ themeId }) {
+function ProxyInspector(props) {
+	const {
+		selected,
+		editPath,
+		setEditPath,
+		editBody,
+		setEditBody,
+		inspectorTab,
+		setInspectorTab,
+		themeId,
+		rawRequest,
+		forwardSelected,
+		sendSelectedToRepeater,
+		dropSelected,
+	} = props;
+
+	const isEditMode = inspectorTab === 'edit';
+	const rawButtonVariant = inspectorTab === 'raw' ? 'solid' : 'outline';
+	const rawButtonColor = inspectorTab === 'raw' ? 'fg.default' : 'fg.muted';
+	const rawButtonBg = inspectorTab === 'raw' ? 'bg.subtle' : 'bg.surface';
+	const editButtonVariant = isEditMode ? 'solid' : 'outline';
+	const editButtonColor = isEditMode ? 'fg.default' : 'fg.muted';
+	const editButtonBg = isEditMode ? 'bg.subtle' : 'bg.surface';
+
+	if (!selected) {
+		return (
+			<Box p='4'>
+				<Text color='fg.muted' fontSize='sm'>Select a paused request to inspect or edit it before forwarding.</Text>
+			</Box>
+		);
+	}
+
+	return (
+		<VStack align='stretch' spacing={3} p='3' h='100%'>
+			<HStack justify='space-between' wrap='wrap'>
+				<Box>
+					<Text fontWeight='semibold'>{selected.method} {selected.host}{selected.path}</Text>
+					<Text fontSize='xs' color='fg.muted'>Request ID <Code color='fg.default' bg='bg.subtle'>{selected.id}</Code></Text>
+				</Box>
+				<HStack>
+					<Button size='xs' variant={rawButtonVariant} onClick={() => setInspectorTab('raw')} color={rawButtonColor} bg={rawButtonBg} borderColor='border.default' _hover={{ bg: 'bg.subtle', color: 'fg.default' }}>Raw</Button>
+					<Button size='xs' variant={editButtonVariant} onClick={() => setInspectorTab('edit')} color={editButtonColor} bg={editButtonBg} borderColor='border.default' _hover={{ bg: 'bg.subtle', color: 'fg.default' }}>Edit</Button>
+				</HStack>
+			</HStack>
+			{isEditMode ? (
+				<VStack align='stretch' spacing={2}>
+					<Input size='sm' value={editPath} onChange={event => setEditPath(event.target.value)} placeholder='Path' fontFamily='mono' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+					<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
+						<MonacoEditor
+							height='240px'
+							defaultLanguage='text'
+							theme={getMonacoTheme(themeId)}
+							value={editBody}
+							onChange={value => setEditBody(value || '')}
+							options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 12 }}
+						/>
+					</Box>
+				</VStack>
+			) : (
+				<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
+					<MonacoEditor
+						height='240px'
+						defaultLanguage='http'
+						theme={getMonacoTheme(themeId)}
+						value={rawRequest}
+						options={{ readOnly: true, minimap: { enabled: false }, wordWrap: 'on', fontSize: 12 }}
+					/>
+				</Box>
+			)}
+			<Separator />
+			<HStack>
+				<Button size='sm' colorPalette='green' onClick={forwardSelected}>Forward</Button>
+				<Button size='sm' variant='outline' onClick={sendSelectedToRepeater} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Repeater</Button>
+				<Button size='sm' colorPalette='red' variant='outline' onClick={dropSelected} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Drop</Button>
+			</HStack>
+		</VStack>
+	);
+}
+
+function ProxyPanel(props) {
+	const { themeId } = props;
 	const [status, setStatus] = React.useState({ running: false, port: 8080, intercepting: true });
 	const [queue, setQueue] = React.useState([]);
 	const [selectedId, setSelectedId] = React.useState('');
@@ -67,19 +168,25 @@ function ProxyPanel({ themeId }) {
 	const [errorText, setErrorText] = React.useState('');
 	const [noticeText, setNoticeText] = React.useState('');
 	const [inspectorTab, setInspectorTab] = React.useState('raw');
+	const queueRef = React.useRef([]);
+
+	React.useEffect(() => {
+		queueRef.current = queue;
+	}, [queue]);
 
 	const selected = queue.find(item => item.id === selectedId) || null;
 
 	React.useEffect(() => {
 		let cancelled = false;
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.proxy) {
+		const sentinel = globalThis?.window?.sentinel;
+		const proxyApi = sentinel?.proxy;
+		if (!proxyApi) {
 			return undefined;
 		}
 
 		async function bootstrap() {
 			try {
-				const currentStatus = await sentinel.proxy.status();
+				const currentStatus = await proxyApi.status();
 				if (!cancelled) {
 					setStatus(currentStatus);
 				}
@@ -92,28 +199,27 @@ function ProxyPanel({ themeId }) {
 
 		bootstrap();
 
-		const unsubscribe = sentinel.proxy.intercept.onRequest((request) => {
-			if (cancelled || !request || !request.id) {
+		const unsubscribe = proxyApi.intercept.onRequest((request) => {
+			if (cancelled || !request?.id) {
 				return;
 			}
-			setQueue(prev => {
-				if (prev.some(item => item.id === request.id)) {
-					return prev;
-				}
-				return [request, ...prev];
-			});
+			const nextQueue = enqueueRequest(queueRef.current, request);
+			queueRef.current = nextQueue;
+			setQueue(nextQueue);
 		});
 
-		const unsubscribeResponse = sentinel.proxy.intercept.onResponse((response) => {
-			if (cancelled || !response || !response.requestId) {
+		const unsubscribeResponse = proxyApi.intercept.onResponse((response) => {
+			if (cancelled || !response?.requestId) {
 				return;
 			}
 
-			setQueue(prev => prev.filter(item => item.id !== response.requestId));
+			const nextQueue = removeQueueRequest(queueRef.current, response.requestId);
+			queueRef.current = nextQueue;
+			setQueue(nextQueue);
 			setSelectedId(prev => (prev === response.requestId ? '' : prev));
 		});
 
-		const unsubscribeError = sentinel.proxy.intercept.onError((payload) => {
+		const unsubscribeError = proxyApi.intercept.onError((payload) => {
 			if (cancelled || !payload) {
 				return;
 			}
@@ -149,14 +255,15 @@ function ProxyPanel({ themeId }) {
 	}, [selectedId]);
 
 	async function startProxy() {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.proxy) {
+		const sentinel = globalThis?.window?.sentinel;
+		const proxyApi = sentinel?.proxy;
+		if (!proxyApi) {
 			return;
 		}
 		setErrorText('');
 		setNoticeText('');
 		try {
-			const running = await sentinel.proxy.start({ port: status.port || 8080 });
+			const running = await proxyApi.start({ port: status.port || 8080 });
 			setStatus(prev => ({ ...prev, running: true, port: running.port }));
 		} catch {
 			setErrorText('Unable to start proxy listener.');
@@ -164,14 +271,15 @@ function ProxyPanel({ themeId }) {
 	}
 
 	async function stopProxy() {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.proxy) {
+		const sentinel = globalThis?.window?.sentinel;
+		const proxyApi = sentinel?.proxy;
+		if (!proxyApi) {
 			return;
 		}
 		setErrorText('');
 		setNoticeText('');
 		try {
-			await sentinel.proxy.stop();
+			await proxyApi.stop();
 			setStatus(prev => ({ ...prev, running: false }));
 		} catch {
 			setErrorText('Unable to stop proxy listener.');
@@ -179,14 +287,15 @@ function ProxyPanel({ themeId }) {
 	}
 
 	async function toggleIntercept() {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.proxy) {
+		const sentinel = globalThis?.window?.sentinel;
+		const proxyApi = sentinel?.proxy;
+		if (!proxyApi) {
 			return;
 		}
 		setErrorText('');
 		setNoticeText('');
 		try {
-			const next = await sentinel.proxy.intercept.toggle({ enabled: !status.intercepting });
+			const next = await proxyApi.intercept.toggle({ enabled: !status.intercepting });
 			setStatus(prev => ({ ...prev, intercepting: next.intercepting }));
 		} catch {
 			setErrorText('Unable to toggle intercept mode.');
@@ -194,14 +303,15 @@ function ProxyPanel({ themeId }) {
 	}
 
 	async function forwardSelected() {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.proxy || !selected) {
+		const sentinel = globalThis?.window?.sentinel;
+		const proxyApi = sentinel?.proxy;
+		if (!proxyApi || !selected) {
 			return;
 		}
 		setErrorText('');
 		setNoticeText('');
 		try {
-			await sentinel.proxy.intercept.forward({
+			await proxyApi.intercept.forward({
 				requestId: selected.id,
 				editedRequest: {
 					path: editPath,
@@ -217,14 +327,15 @@ function ProxyPanel({ themeId }) {
 	}
 
 	async function dropSelected() {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.proxy || !selected) {
+		const sentinel = globalThis?.window?.sentinel;
+		const proxyApi = sentinel?.proxy;
+		if (!proxyApi || !selected) {
 			return;
 		}
 		setErrorText('');
 		setNoticeText('');
 		try {
-			await sentinel.proxy.intercept.drop({ requestId: selected.id });
+			await proxyApi.intercept.drop({ requestId: selected.id });
 			setQueue(prev => prev.filter(item => item.id !== selected.id));
 			setSelectedId('');
 			setNoticeText('Dropped selected request.');
@@ -237,7 +348,11 @@ function ProxyPanel({ themeId }) {
 		if (!selected) {
 			return;
 		}
-		window.dispatchEvent(new CustomEvent('sentinel:repeater-handoff', {
+		const appWindow = globalThis?.window;
+		if (!appWindow) {
+			return;
+		}
+		appWindow.dispatchEvent(new CustomEvent('sentinel:repeater-handoff', {
 			detail: {
 				request: {
 					...selected,
@@ -246,13 +361,13 @@ function ProxyPanel({ themeId }) {
 				},
 			},
 		}));
-		window.dispatchEvent(new CustomEvent('sentinel:navigate-module', {
+		appWindow.dispatchEvent(new CustomEvent('sentinel:navigate-module', {
 			detail: { moduleName: 'Repeater' },
 		}));
 		setNoticeText('Queued request loaded into Repeater.');
 	}
 
-	const rawRequest = selected ? buildRawRequest(selected, editPath, editBody) : '';
+	const rawRequest = selected ? buildRawRequest(editPath, editBody, selected) : '';
 
 	return (
 		<Flex h='100%' overflow='hidden' direction='column'>
@@ -291,55 +406,20 @@ function ProxyPanel({ themeId }) {
 						{queue.length === 0 ? <Text color='fg.muted' fontSize='sm' p='3'>No paused requests.</Text> : <ProxyQueue queue={queue} selectedId={selectedId} onSelect={setSelectedId} />}
 					</Box>
 					<Box w='44%' minW='360px' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
-						{selected ? (
-							<VStack align='stretch' spacing={3} p='3' h='100%'>
-								<HStack justify='space-between' wrap='wrap'>
-									<Box>
-										<Text fontWeight='semibold'>{selected.method} {selected.host}{selected.path}</Text>
-										<Text fontSize='xs' color='fg.muted'>Request ID <Code color='fg.default' bg='bg.subtle'>{selected.id}</Code></Text>
-									</Box>
-									<HStack>
-										<Button size='xs' variant={inspectorTab === 'raw' ? 'solid' : 'outline'} onClick={() => setInspectorTab('raw')} color={inspectorTab === 'raw' ? 'fg.default' : 'fg.muted'} bg={inspectorTab === 'raw' ? 'bg.subtle' : 'bg.surface'} borderColor='border.default' _hover={{ bg: 'bg.subtle', color: 'fg.default' }}>Raw</Button>
-										<Button size='xs' variant={inspectorTab === 'edit' ? 'solid' : 'outline'} onClick={() => setInspectorTab('edit')} color={inspectorTab === 'edit' ? 'fg.default' : 'fg.muted'} bg={inspectorTab === 'edit' ? 'bg.subtle' : 'bg.surface'} borderColor='border.default' _hover={{ bg: 'bg.subtle', color: 'fg.default' }}>Edit</Button>
-									</HStack>
-								</HStack>
-								{inspectorTab === 'edit' ? (
-									<VStack align='stretch' spacing={2}>
-										<Input size='sm' value={editPath} onChange={event => setEditPath(event.target.value)} placeholder='Path' fontFamily='mono' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-										<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
-											<MonacoEditor
-												height='240px'
-												defaultLanguage='text'
-												theme={getMonacoTheme(themeId)}
-												value={editBody}
-												onChange={value => setEditBody(value || '')}
-												options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 12 }}
-											/>
-										</Box>
-									</VStack>
-								) : (
-									<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
-										<MonacoEditor
-											height='240px'
-											defaultLanguage='http'
-											theme={getMonacoTheme(themeId)}
-											value={rawRequest}
-											options={{ readOnly: true, minimap: { enabled: false }, wordWrap: 'on', fontSize: 12 }}
-										/>
-									</Box>
-								)}
-								<Separator />
-								<HStack>
-									<Button size='sm' colorPalette='green' onClick={forwardSelected}>Forward</Button>
-									<Button size='sm' variant='outline' onClick={sendSelectedToRepeater} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Repeater</Button>
-									<Button size='sm' colorPalette='red' variant='outline' onClick={dropSelected} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Drop</Button>
-								</HStack>
-							</VStack>
-						) : (
-							<Box p='4'>
-								<Text color='fg.muted' fontSize='sm'>Select a paused request to inspect or edit it before forwarding.</Text>
-							</Box>
-						)}
+						<ProxyInspector
+							selected={selected}
+							editPath={editPath}
+							setEditPath={setEditPath}
+							editBody={editBody}
+							setEditBody={setEditBody}
+							inspectorTab={inspectorTab}
+							setInspectorTab={setInspectorTab}
+							themeId={themeId}
+							rawRequest={rawRequest}
+							forwardSelected={forwardSelected}
+							sendSelectedToRepeater={sendSelectedToRepeater}
+							dropSelected={dropSelected}
+						/>
 					</Box>
 				</Flex>
 
@@ -353,5 +433,40 @@ function ProxyPanel({ themeId }) {
 		</Flex>
 	);
 }
+
+ProxyQueue.propTypes = {
+	queue: PropTypes.arrayOf(PropTypes.shape({
+		id: PropTypes.string,
+		method: PropTypes.string,
+		host: PropTypes.string,
+		path: PropTypes.string,
+	})).isRequired,
+	selectedId: PropTypes.string.isRequired,
+	onSelect: PropTypes.func.isRequired,
+};
+
+ProxyInspector.propTypes = {
+	selected: PropTypes.shape({
+		id: PropTypes.string,
+		method: PropTypes.string,
+		host: PropTypes.string,
+		path: PropTypes.string,
+	}),
+	editPath: PropTypes.string.isRequired,
+	setEditPath: PropTypes.func.isRequired,
+	editBody: PropTypes.string.isRequired,
+	setEditBody: PropTypes.func.isRequired,
+	inspectorTab: PropTypes.string.isRequired,
+	setInspectorTab: PropTypes.func.isRequired,
+	themeId: PropTypes.string,
+	rawRequest: PropTypes.string.isRequired,
+	forwardSelected: PropTypes.func.isRequired,
+	sendSelectedToRepeater: PropTypes.func.isRequired,
+	dropSelected: PropTypes.func.isRequired,
+};
+
+ProxyPanel.propTypes = {
+	themeId: PropTypes.string,
+};
 
 export default ProxyPanel;

@@ -8,6 +8,7 @@ AC 5: Side-by-side compare between two sends.
 */
 
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
 	Badge,
 	Box,
@@ -75,11 +76,32 @@ function toHex(base64) {
 	}
 }
 
+function labelForSend(send) {
+	if (!send) {
+		return '';
+	}
+	return `${send.request.method} ${send.request.path || send.request.url || '/'} — ${new Date(send.sentAt).toLocaleTimeString()}`;
+}
+
+function bodyOfSend(send) {
+	if (!send?.response) {
+		return '[none]';
+	}
+	if (send.response.body !== undefined && send.response.body !== null) {
+		return String(send.response.body);
+	}
+	if (send.response.rawBodyBase64) {
+		return `[binary ${send.response.bodyLength} bytes]`;
+	}
+	return '[empty]';
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ResponseViewer({ response, themeId }) {
+function ResponseViewer(props) {
+	const { response, themeId } = props;
 	const [view, setView] = React.useState('raw');
 
 	if (!response) {
@@ -90,17 +112,26 @@ function ResponseViewer({ response, themeId }) {
 		);
 	}
 
-	const statusColor = response.statusCode < 300 ? 'green' : response.statusCode < 400 ? 'blue' : 'red';
-	const rawText = response.body != null
-		? String(response.body)
-		: response.rawBodyBase64
-			? `[binary ${response.bodyLength || 0} bytes]`
-			: '[empty body]';
+	let statusColor = 'red';
+	if (response.statusCode < 300) {
+		statusColor = 'green';
+	} else if (response.statusCode < 400) {
+		statusColor = 'blue';
+	}
+
+	let rawText = '[empty body]';
+	if (response.body !== undefined && response.body !== null) {
+		rawText = String(response.body);
+	} else if (response.rawBodyBase64) {
+		rawText = `[binary ${response.bodyLength || 0} bytes]`;
+	}
 
 	const hexText = toHex(response.rawBodyBase64);
-	const renderedHtml = response.contentType && response.contentType.includes('html') && response.body
+	const renderedHtml = response.contentType?.includes('html') && response.body
 		? response.body
 		: null;
+	const hasTiming = Number.isFinite(response.timings?.total);
+	const timingText = hasTiming ? ` · ${response.timings.total}ms` : '';
 
 	const statusColorMap = {
 		green: { border: 'green.500', bg: 'rgba(34,197,94,0.1)' },
@@ -117,7 +148,7 @@ function ResponseViewer({ response, themeId }) {
 				</Badge>
 				<Text fontSize='xs' color='fg.muted'>
 					{response.contentType || 'unknown'} · {response.bodyLength || 0} bytes
-					{response.timings ? ` · ${response.timings.total}ms` : ''}
+					{timingText}
 				</Text>
 			</HStack>
 			<HStack mb={2}>
@@ -196,15 +227,31 @@ function ResponseViewer({ response, themeId }) {
 	);
 }
 
+ResponseViewer.propTypes = {
+	response: PropTypes.shape({
+		statusCode: PropTypes.number,
+		statusMessage: PropTypes.string,
+		body: PropTypes.any,
+		rawBodyBase64: PropTypes.string,
+		bodyLength: PropTypes.number,
+		contentType: PropTypes.string,
+		timings: PropTypes.shape({
+			total: PropTypes.number,
+		}),
+	}),
+	themeId: PropTypes.string,
+};
+
 // ---------------------------------------------------------------------------
 // CompareView – AC 5
 // ---------------------------------------------------------------------------
 
-function CompareView({ sends }) {
+function CompareView(props) {
+	const { sends } = props;
 	const [idA, setIdA] = React.useState('');
 	const [idB, setIdB] = React.useState('');
 
-	if (!sends || sends.length < 2) {
+	if (sends.length < 2) {
 		return (
 			<Box borderWidth='1px' borderRadius='md' p={3}>
 				<Text color='fg.muted' fontSize='sm'>Send at least 2 requests to compare.</Text>
@@ -214,24 +261,6 @@ function CompareView({ sends }) {
 
 	const sendA = sends.find(s => s.id === idA);
 	const sendB = sends.find(s => s.id === idB);
-
-	function labelFor(send) {
-		if (!send) {
-			return '';
-		}
-		return `${send.request.method} ${send.request.path || send.request.url || '/'} — ${new Date(send.sentAt).toLocaleTimeString()}`;
-	}
-
-	function bodyOf(send) {
-		if (!send || !send.response) {
-			return '[none]';
-		}
-		return send.response.body != null
-			? String(send.response.body)
-			: send.response.rawBodyBase64
-				? `[binary ${send.response.bodyLength} bytes]`
-				: '[empty]';
-	}
 
 	return (
 		<Box borderWidth='1px' borderRadius='md' p={3}>
@@ -249,7 +278,7 @@ function CompareView({ sends }) {
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
-							<option key={s.id} value={s.id}>{labelFor(s)}</option>
+							<option key={s.id} value={s.id}>{labelForSend(s)}</option>
 						))}
 					</Select>
 				</Box>
@@ -265,7 +294,7 @@ function CompareView({ sends }) {
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
-							<option key={s.id} value={s.id}>{labelFor(s)}</option>
+							<option key={s.id} value={s.id}>{labelForSend(s)}</option>
 						))}
 					</Select>
 				</Box>
@@ -279,7 +308,7 @@ function CompareView({ sends }) {
 									A — {sendA.response && `${sendA.response.statusCode} · ${sendA.response.bodyLength}b · ${sendA.response.timings ? sendA.response.timings.total + 'ms' : ''}`}
 								</Text>
 								<Box as='pre' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflowY='auto' maxH='200px' p={2} borderWidth='1px' borderRadius='sm'>
-									{bodyOf(sendA)}
+									{bodyOfSend(sendA)}
 								</Box>
 							</>
 						)}
@@ -291,7 +320,7 @@ function CompareView({ sends }) {
 									B — {sendB.response && `${sendB.response.statusCode} · ${sendB.response.bodyLength}b · ${sendB.response.timings ? sendB.response.timings.total + 'ms' : ''}`}
 								</Text>
 								<Box as='pre' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflowY='auto' maxH='200px' p={2} borderWidth='1px' borderRadius='sm'>
-									{bodyOf(sendB)}
+									{bodyOfSend(sendB)}
 								</Box>
 							</>
 						)}
@@ -302,11 +331,33 @@ function CompareView({ sends }) {
 	);
 }
 
+CompareView.propTypes = {
+	sends: PropTypes.arrayOf(PropTypes.shape({
+		id: PropTypes.string,
+		sentAt: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+		request: PropTypes.shape({
+			method: PropTypes.string,
+			path: PropTypes.string,
+			url: PropTypes.string,
+		}),
+		response: PropTypes.shape({
+			statusCode: PropTypes.number,
+			bodyLength: PropTypes.number,
+			body: PropTypes.any,
+			rawBodyBase64: PropTypes.string,
+			timings: PropTypes.shape({
+				total: PropTypes.number,
+			}),
+		}),
+	})).isRequired,
+};
+
 // ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
-function RepeaterPanel({ themeId }) {
+function RepeaterPanel(props) {
+	const { themeId } = props;
 	// Sidebar
 	const [entries, setEntries] = React.useState([]);
 	const [selectedEntryId, setSelectedEntryId] = React.useState('');
@@ -324,11 +375,11 @@ function RepeaterPanel({ themeId }) {
 	const [sending, setSending] = React.useState(false);
 	const [errorText, setErrorText] = React.useState('');
 
-	const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
+	const sentinel = globalThis?.window?.sentinel || null;
 
 	// Load sidebar entries on mount
 	React.useEffect(() => {
-		if (!sentinel || !sentinel.repeater) {
+		if (!sentinel?.repeater) {
 			return;
 		}
 		sentinel.repeater.historyList().then(result => {
@@ -337,8 +388,13 @@ function RepeaterPanel({ themeId }) {
 	}, []);
 
 	React.useEffect(() => {
+		const appWindow = globalThis?.window;
+		if (!appWindow) {
+			return undefined;
+		}
+
 		function handleHandoff(event) {
-			const request = event && event.detail ? event.detail.request : null;
+			const request = event?.detail?.request || null;
 			if (!request) {
 				return;
 			}
@@ -353,14 +409,14 @@ function RepeaterPanel({ themeId }) {
 			setErrorText('');
 		}
 
-		window.addEventListener('sentinel:repeater-handoff', handleHandoff);
+		appWindow.addEventListener('sentinel:repeater-handoff', handleHandoff);
 		return () => {
-			window.removeEventListener('sentinel:repeater-handoff', handleHandoff);
+			appWindow.removeEventListener('sentinel:repeater-handoff', handleHandoff);
 		};
 	}, []);
 
 	async function loadEntry(id) {
-		if (!sentinel || !sentinel.repeater) {
+		if (!sentinel?.repeater) {
 			return;
 		}
 		try {
@@ -382,7 +438,7 @@ function RepeaterPanel({ themeId }) {
 	}
 
 	async function handleSend() {
-		if (!sentinel || !sentinel.repeater) {
+		if (!sentinel?.repeater) {
 			return;
 		}
 		setErrorText('');
@@ -402,7 +458,7 @@ function RepeaterPanel({ themeId }) {
 			const listResult = await sentinel.repeater.historyList();
 			setEntries(Array.isArray(listResult.items) ? listResult.items : []);
 
-			const entryId = result.entry ? result.entry.id : selectedEntryId;
+			const entryId = result.entry?.id || selectedEntryId;
 			if (entryId) {
 				setSelectedEntryId(entryId);
 				const fullEntry = await sentinel.repeater.get({ id: entryId });
@@ -411,7 +467,7 @@ function RepeaterPanel({ themeId }) {
 				}
 			}
 		} catch (error) {
-			setErrorText(error && error.message ? `Send failed: ${error.message}` : 'Send failed.');
+			setErrorText(error?.message || 'Send failed.');
 		} finally {
 			setSending(false);
 		}
@@ -457,8 +513,8 @@ function RepeaterPanel({ themeId }) {
 									textOverflow='ellipsis'
 									onClick={() => loadEntry(entry.id)}
 								>
-									{(entry.request && entry.request.method) || 'GET'}{' '}
-									{(entry.request && (entry.request.url || entry.request.path)) || '/'}
+									{entry.request?.method || 'GET'}{' '}
+									{entry.request?.url || entry.request?.path || '/'}
 								</Button>
 							))}
 						</VStack>
@@ -567,13 +623,13 @@ function RepeaterPanel({ themeId }) {
 													{send.request.path || send.request.url || '/'}{' '}
 													→{' '}
 													<Code fontSize='xs' color='fg.default' bg='bg.subtle'>
-														{send.response && send.response.statusCode}
+														{send.response?.statusCode}
 													</Code>
 												</Text>
 												<Text fontSize='xs' color='fg.muted'>
-													{send.response && send.response.bodyLength}b
+													{send.response?.bodyLength}b
 													{' '}
-													{send.response && send.response.timings
+													{send.response?.timings
 														? `${send.response.timings.total}ms`
 														: ''}
 												</Text>
@@ -592,5 +648,9 @@ function RepeaterPanel({ themeId }) {
 		</Box>
 	);
 }
+
+RepeaterPanel.propTypes = {
+	themeId: PropTypes.string,
+};
 
 export default RepeaterPanel;

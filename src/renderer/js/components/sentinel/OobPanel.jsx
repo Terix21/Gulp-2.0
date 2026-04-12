@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
   Badge,
   Box,
@@ -19,7 +20,7 @@ function isLoopbackUrl(url) {
 }
 
 function OobPanel({ themeId }) {
-  const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
+  const sentinel = globalThis?.window?.sentinel || null;
   const [payloadType, setPayloadType] = React.useState('http');
   const [sourceRequestId, setSourceRequestId] = React.useState('');
   const [sourceScanId, setSourceScanId] = React.useState('');
@@ -31,7 +32,7 @@ function OobPanel({ themeId }) {
   const [errorText, setErrorText] = React.useState('');
 
   React.useEffect(() => {
-    if (!sentinel || !sentinel.oob || !sentinel.oob.onHit) {
+    if (typeof sentinel?.oob?.onHit !== 'function') {
       return undefined;
     }
 
@@ -47,7 +48,7 @@ function OobPanel({ themeId }) {
   }, [sentinel]);
 
   async function createPayload() {
-    if (!sentinel || !sentinel.oob) {
+    if (!sentinel?.oob) {
       return;
     }
 
@@ -65,12 +66,12 @@ function OobPanel({ themeId }) {
       setStatusText('New OOB payload generated.');
       await loadHits(payload.id);
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to create OOB payload.');
+      setErrorText(error?.message || 'Unable to create OOB payload.');
     }
   }
 
   async function loadHits(payloadId = selectedPayloadId) {
-    if (!sentinel || !sentinel.oob || !payloadId) {
+    if (!sentinel?.oob || !payloadId) {
       return;
     }
 
@@ -80,7 +81,7 @@ function OobPanel({ themeId }) {
       setHits(Array.isArray(result.hits) ? result.hits : []);
       setStatusText(`Loaded callbacks for payload ${payloadId}`);
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to load OOB callbacks.');
+      setErrorText(error?.message || 'Unable to load OOB callbacks.');
     }
   }
 
@@ -170,5 +171,9 @@ function OobPanel({ themeId }) {
     </Box>
   );
 }
+
+OobPanel.propTypes = {
+  themeId: PropTypes.string,
+};
 
 export default OobPanel;

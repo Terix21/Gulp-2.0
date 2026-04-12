@@ -118,20 +118,26 @@ function buildBrowserUnsubscribers({
   };
 
   const unsubscribers = [];
+  const addUnsubscriber = (unsubscribe) => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribers.push(unsubscribe);
+    }
+  };
+
   if (typeof browser.onState === 'function') {
-    unsubscribers.push(browser.onState(onState));
+    addUnsubscriber(browser.onState(onState));
   }
   if (typeof browser.onNavigateStart === 'function') {
-    unsubscribers.push(browser.onNavigateStart(onNavigateStart));
+    addUnsubscriber(browser.onNavigateStart(onNavigateStart));
   }
   if (typeof browser.onNavigateComplete === 'function') {
-    unsubscribers.push(browser.onNavigateComplete(onNavigateComplete));
+    addUnsubscriber(browser.onNavigateComplete(onNavigateComplete));
   }
   if (typeof browser.onNavigateError === 'function') {
-    unsubscribers.push(browser.onNavigateError(onNavigateError));
+    addUnsubscriber(browser.onNavigateError(onNavigateError));
   }
   if (typeof browser.onTitleUpdated === 'function') {
-    unsubscribers.push(browser.onTitleUpdated(onTitleUpdated));
+    addUnsubscriber(browser.onTitleUpdated(onTitleUpdated));
   }
 
   return unsubscribers;
@@ -417,7 +423,17 @@ function EmbeddedBrowserPanel({ themeId }) {
         <Button size='xs' variant='ghost' onClick={() => runNavigation('forward')} disabled={!activeSession?.canGoForward}>&#8594;</Button>
         <Button size='xs' variant='ghost' onClick={() => runNavigation('reload')} disabled={!activeSession}>&#8635;</Button>
         <Button size='xs' variant='ghost' onClick={() => runNavigation('stop')} disabled={!activeSession?.loading}>&#x2715;</Button>
-        <Input flex='1' size='xs' value={address} onChange={event => setAddress(event.target.value)} placeholder='https://target.example' />
+        <Input
+          flex='1'
+          size='xs'
+          value={address}
+          onChange={event => setAddress(event.target.value)}
+          placeholder='https://target.example'
+          color='fg.default'
+          bg='bg.subtle'
+          borderColor='border.default'
+          _placeholder={{ color: 'fg.muted' }}
+        />
         <Button size='xs' colorPalette='blue' onClick={navigate} disabled={!activeSessionId}>Go</Button>
         <Button size='xs' variant='outline' colorPalette='red' onClick={closeActiveSession} disabled={!activeSessionId}>Close</Button>
       </HStack>

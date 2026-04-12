@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
   Badge,
   Box,
@@ -28,6 +29,94 @@ function flattenTree(nodes = [], depth = 0, rows = []) {
   return rows;
 }
 
+function getImportResultStyles(importResult, themeId) {
+  let borderColor = 'border.default';
+  let bg = 'bg.subtle';
+  let textColor = 'fg.muted';
+
+  if (importResult?.kind === 'success') {
+    borderColor = 'green.500';
+    bg = 'rgba(34,197,94,0.08)';
+    textColor = getStatusTextColor('success', themeId);
+  } else if (importResult?.kind === 'error') {
+    borderColor = 'red.500';
+    bg = 'rgba(239,68,68,0.08)';
+    textColor = getStatusTextColor('error', themeId);
+  }
+
+  return { borderColor, bg, textColor };
+}
+
+function ImportResultNotice({ importResult, themeId }) {
+  if (!importResult) {
+    return null;
+  }
+
+  const styles = getImportResultStyles(importResult, themeId);
+  const warnings = Array.isArray(importResult?.warnings) ? importResult.warnings : [];
+
+  return (
+    <Box mt={1} p={2} borderRadius='sm' borderWidth='1px' borderColor={styles.borderColor} bg={styles.bg}>
+      <Text fontSize='sm' color={styles.textColor}>{importResult?.message}</Text>
+      {warnings.length > 0 ? (
+        <VStack align='stretch' spacing={0} mt={1}>
+          {warnings.map(warning => (
+            <Text key={`${importResult?.kind || 'notice'}-${warning}`} fontSize='xs' color={getStatusTextColor('warn', themeId)}>
+              {`⚠ ${warning}`}
+            </Text>
+          ))}
+        </VStack>
+      ) : null}
+    </Box>
+  );
+}
+
+function ScopeRulesList({ rules, onRemoveRule }) {
+  if (rules.length === 0) {
+    return <Text fontSize='sm' color='fg.muted'>No scope rules configured.</Text>;
+  }
+
+  return rules.map(rule => {
+    const isInclude = rule.kind === 'include';
+    const badgeBorderColor = isInclude ? 'green.500' : 'red.500';
+    const badgeBackground = isInclude ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+    return (
+      <HStack key={rule.id} justify='space-between' borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
+        <HStack>
+          <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={badgeBorderColor} bg={badgeBackground}>
+            {rule.kind}
+          </Badge>
+          <Text fontSize='sm' color='fg.default'>
+            {rule.host || rule.ip || rule.cidr || 'unknown'}
+            {rule.path ? ` ${rule.path}` : ''}
+          </Text>
+        </HStack>
+        <Button size='xs' variant='ghost' onClick={() => onRemoveRule(rule.id)} color='fg.muted' _hover={{ color: 'fg.default', bg: 'bg.subtle' }}>Remove</Button>
+      </HStack>
+    );
+  });
+}
+
+function SiteMapList({ sitemapRows }) {
+  if (sitemapRows.length === 0) {
+    return <Text fontSize='sm' color='fg.muted'>No observed traffic yet.</Text>;
+  }
+
+  return sitemapRows.map(row => {
+    const inScopeBorderColor = row.inScope ? 'green.500' : 'orange.500';
+    const inScopeBackground = row.inScope ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)';
+    const typeLabel = row.type === 'host' ? row.label : `/${row.label}`;
+    return (
+      <HStack key={row.id} pl={`${row.depth * 16}px`} spacing={2}>
+        <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={inScopeBorderColor} bg={inScopeBackground}>
+          {row.inScope ? 'in-scope' : 'out-of-scope'}
+        </Badge>
+        <Text fontSize='sm'>{typeLabel}</Text>
+      </HStack>
+    );
+  });
+}
+
 function TargetMapPanel({ themeId }) {
   const [rules, setRules] = React.useState([]);
   const [sitemapRows, setSitemapRows] = React.useState([]);
@@ -49,8 +138,8 @@ function TargetMapPanel({ themeId }) {
   const [importResult, setImportResult] = React.useState(null);
 
   const loadScope = React.useCallback(async () => {
-    const sentinel = window.sentinel;
-    if (!sentinel || !sentinel.scope) {
+    const sentinel = globalThis?.window?.sentinel;
+    if (!sentinel?.scope) {
       return;
     }
     const payload = await sentinel.scope.get();
@@ -58,8 +147,8 @@ function TargetMapPanel({ themeId }) {
   }, []);
 
   const loadSitemap = React.useCallback(async () => {
-    const sentinel = window.sentinel;
-    if (!sentinel || !sentinel.target) {
+    const sentinel = globalThis?.window?.sentinel;
+    if (!sentinel?.target) {
       return;
     }
     const payload = await sentinel.target.sitemap();
@@ -85,8 +174,8 @@ function TargetMapPanel({ themeId }) {
   }, [loadScope, loadSitemap]);
 
   async function saveRules(nextRules) {
-    const sentinel = window.sentinel;
-    if (!sentinel || !sentinel.scope) {
+    const sentinel = globalThis?.window?.sentinel;
+    if (!sentinel?.scope) {
       return;
     }
     await sentinel.scope.set({ rules: nextRules });
@@ -117,7 +206,7 @@ function TargetMapPanel({ themeId }) {
       setStatusText('Scope rule saved.');
       await loadSitemap();
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to save scope rule.');
+      setErrorText(error?.message || 'Unable to save scope rule.');
     }
   }
 
@@ -138,25 +227,28 @@ function TargetMapPanel({ themeId }) {
     setImportResult(null);
     setImportBurpLoading(true);
     try {
-      const sentinel = window.sentinel;
-      if (!sentinel || !sentinel.scope) {
+      const sentinel = globalThis?.window?.sentinel;
+      if (!sentinel?.scope) {
         setImportResult({ kind: 'error', message: 'Scope API unavailable.', warnings: [] });
         return;
       }
       const result = await sentinel.scope.importBurp({});
-      if (!result || result.ok === false) {
+      if (result?.ok === false || !result) {
         setImportResult({ kind: 'cancelled', message: 'Burp import cancelled.', warnings: [] });
         return;
       }
+
+      const imported = result?.imported || 0;
+      const entryLabel = imported === 1 ? 'entry' : 'entries';
       await loadScope();
       await loadSitemap();
       setImportResult({
         kind: 'success',
-        message: `Imported ${result.imported || 0} Burp scope ${result.imported === 1 ? 'entry' : 'entries'}.`,
-        warnings: Array.isArray(result.warnings) ? result.warnings : [],
+        message: `Imported ${imported} Burp scope ${entryLabel}.`,
+        warnings: Array.isArray(result?.warnings) ? result.warnings : [],
       });
     } catch (error) {
-      const msg = error && error.message ? error.message : 'Unknown error';
+      const msg = error?.message || 'Unknown error';
       setImportResult({ kind: 'error', message: `Burp import failed: ${msg}`, warnings: [] });
     } finally {
       setImportBurpLoading(false);
@@ -167,25 +259,29 @@ function TargetMapPanel({ themeId }) {
     setImportResult(null);
     setImportCsvLoading(true);
     try {
-      const sentinel = window.sentinel;
-      if (!sentinel || !sentinel.scope) {
+      const sentinel = globalThis?.window?.sentinel;
+      if (!sentinel?.scope) {
         setImportResult({ kind: 'error', message: 'Scope API unavailable.', warnings: [] });
         return;
       }
       const result = await sentinel.scope.importCsv({ format: csvFormat });
-      if (!result || result.ok === false) {
+      if (result?.ok === false || !result) {
         setImportResult({ kind: 'cancelled', message: 'CSV import cancelled.', warnings: [] });
         return;
       }
+
+      const imported = result?.imported || 0;
+      const formatLabel = csvFormat === 'hackerone' ? 'HackerOne' : 'CSV';
+      const entryLabel = imported === 1 ? 'entry' : 'entries';
       await loadScope();
       await loadSitemap();
       setImportResult({
         kind: 'success',
-        message: `Imported ${result.imported || 0} ${csvFormat === 'hackerone' ? 'HackerOne' : 'CSV'} scope ${result.imported === 1 ? 'entry' : 'entries'}.`,
-        warnings: Array.isArray(result.warnings) ? result.warnings : [],
+        message: `Imported ${imported} ${formatLabel} scope ${entryLabel}.`,
+        warnings: Array.isArray(result?.warnings) ? result.warnings : [],
       });
     } catch (error) {
-      const msg = error && error.message ? error.message : 'Unknown error';
+      const msg = error?.message || 'Unknown error';
       setImportResult({ kind: 'error', message: `CSV import failed: ${msg}`, warnings: [] });
     } finally {
       setImportCsvLoading(false);
@@ -292,44 +388,7 @@ function TargetMapPanel({ themeId }) {
                 Import CSV
               </Button>
             </HStack>
-            {importResult ? (
-              <Box
-                mt={1}
-                p={2}
-                borderRadius='sm'
-                borderWidth='1px'
-                borderColor={
-                  importResult.kind === 'success' ? 'green.500'
-                  : importResult.kind === 'error' ? 'red.500'
-                  : 'border.default'
-                }
-                bg={
-                  importResult.kind === 'success' ? 'rgba(34,197,94,0.08)'
-                  : importResult.kind === 'error' ? 'rgba(239,68,68,0.08)'
-                  : 'bg.subtle'
-                }
-              >
-                <Text
-                  fontSize='sm'
-                  color={
-                    importResult.kind === 'success' ? getStatusTextColor('success', themeId)
-                    : importResult.kind === 'error' ? getStatusTextColor('error', themeId)
-                    : 'fg.muted'
-                  }
-                >
-                  {importResult.message}
-                </Text>
-                {importResult.warnings && importResult.warnings.length > 0 ? (
-                  <VStack align='stretch' spacing={0} mt={1}>
-                    {importResult.warnings.map((warning, index) => (
-                      <Text key={index} fontSize='xs' color={getStatusTextColor('warn', themeId)}>
-                        ⚠ {warning}
-                      </Text>
-                    ))}
-                  </VStack>
-                ) : null}
-              </Box>
-            ) : null}
+            <ImportResultNotice importResult={importResult} themeId={themeId} />
           </VStack>
         </Box>
 
@@ -338,27 +397,7 @@ function TargetMapPanel({ themeId }) {
             <Text fontWeight='semibold' fontSize='sm'>Scope Rules</Text>
             <Code color='fg.default' bg='bg.subtle'>{rules.length} rules</Code>
           </HStack>
-          {rules.length === 0 ? (
-            <Text fontSize='sm' color='fg.muted'>No scope rules configured.</Text>
-          ) : rules.map(rule => (
-            <HStack key={rule.id} justify='space-between' borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2} mb={2}>
-              <HStack>
-                  <Badge 
-                    variant='outline' 
-                    color='var(--sentinel-fg-default)' 
-                    borderColor={rule.kind === 'include' ? 'green.500' : 'red.500'} 
-                    bg={rule.kind === 'include' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}
-                  >
-                    {rule.kind}
-                  </Badge>
-                <Text fontSize='sm' color='fg.default'>
-                  {rule.host || rule.ip || rule.cidr || 'unknown'}
-                  {rule.path ? ` ${rule.path}` : ''}
-                </Text>
-              </HStack>
-              <Button size='xs' variant='ghost' onClick={() => removeRule(rule.id)} color='fg.muted' _hover={{ color: 'fg.default', bg: 'bg.subtle' }}>Remove</Button>
-            </HStack>
-          ))}
+          <ScopeRulesList rules={rules} onRemoveRule={removeRule} />
         </Box>
 
         <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
@@ -366,21 +405,7 @@ function TargetMapPanel({ themeId }) {
             <Text fontWeight='semibold' fontSize='sm' color='fg.default'>Site Map</Text>
             <Button size='xs' variant='outline' onClick={loadSitemap} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh</Button>
           </HStack>
-          {sitemapRows.length === 0 ? (
-            <Text fontSize='sm' color='fg.muted'>No observed traffic yet.</Text>
-          ) : sitemapRows.map(row => (
-            <HStack key={row.id} pl={`${row.depth * 16}px`} spacing={2}>
-                <Badge 
-                  variant='outline' 
-                  color='var(--sentinel-fg-default)' 
-                  borderColor={row.inScope ? 'green.500' : 'orange.500'} 
-                  bg={row.inScope ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)'}
-                >
-                {row.inScope ? 'in-scope' : 'out-of-scope'}
-              </Badge>
-              <Text fontSize='sm'>{row.type === 'host' ? row.label : `/${row.label}`}</Text>
-            </HStack>
-          ))}
+          <SiteMapList sitemapRows={sitemapRows} />
         </Box>
 
         {statusText ? <Text color={getStatusTextColor('success', themeId)} fontSize='sm'>{statusText}</Text> : null}
@@ -389,5 +414,40 @@ function TargetMapPanel({ themeId }) {
     </Box>
   );
 }
+
+ImportResultNotice.propTypes = {
+  importResult: PropTypes.shape({
+    kind: PropTypes.string,
+    message: PropTypes.string,
+    warnings: PropTypes.arrayOf(PropTypes.string),
+  }),
+  themeId: PropTypes.string,
+};
+
+ScopeRulesList.propTypes = {
+  rules: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.string,
+    kind: PropTypes.string,
+    host: PropTypes.string,
+    ip: PropTypes.string,
+    cidr: PropTypes.string,
+    path: PropTypes.string,
+  })).isRequired,
+  onRemoveRule: PropTypes.func.isRequired,
+};
+
+SiteMapList.propTypes = {
+  sitemapRows: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.string,
+    depth: PropTypes.number,
+    inScope: PropTypes.bool,
+    type: PropTypes.string,
+    label: PropTypes.string,
+  })).isRequired,
+};
+
+TargetMapPanel.propTypes = {
+  themeId: PropTypes.string,
+};
 
 export default TargetMapPanel;

@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
   Badge,
   Box,
@@ -92,7 +93,7 @@ function estimateSourceCount(source) {
 
   if (source.type === 'dictionary') {
     if (source.filePath) {
-      return 'file';
+      return Number.NaN;
     }
     return String(source.text || '')
       .split(/\r?\n/g)
@@ -128,7 +129,7 @@ function estimateSourceCount(source) {
 function estimateAttackTotal(attackType, sources) {
   const counts = sources
     .map(source => estimateSourceCount(source))
-    .filter(count => typeof count === 'number');
+    .filter(count => Number.isFinite(count));
   if (counts.length === 0) {
     return 'unknown';
   }
@@ -163,16 +164,77 @@ function insertMarker(ref, value, setValue, fallbackLabel) {
 function sortResults(results, sortBy, sortDirection) {
   const sorted = [...results];
   sorted.sort((left, right) => {
-    const leftValue = left && left[sortBy] != null ? left[sortBy] : 0;
-    const rightValue = right && right[sortBy] != null ? right[sortBy] : 0;
+    const leftCandidate = left?.[sortBy];
+    const rightCandidate = right?.[sortBy];
+    const leftValue = leftCandidate == null ? 0 : leftCandidate;
+    const rightValue = rightCandidate == null ? 0 : rightCandidate;
     if (leftValue === rightValue) {
       return 0;
     }
-    return sortDirection === 'asc'
-      ? (leftValue > rightValue ? 1 : -1)
-      : (leftValue < rightValue ? 1 : -1);
+    if (sortDirection === 'asc') {
+      return leftValue > rightValue ? 1 : -1;
+    }
+    return leftValue < rightValue ? 1 : -1;
   });
   return sorted;
+}
+
+function buildAttackFromProgress(payload, context) {
+  return {
+    id: payload.attackId,
+    status: payload.status || 'running',
+    attackType: context.attackType,
+    positionCount: context.markersLength,
+    requestSummary: `${context.method} ${context.url}`,
+    sent: payload.sent,
+    total: payload.total,
+    anomalousCount: payload.lastResult?.isAnomalous ? 1 : 0,
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+function updateAttacksWithProgress(previousAttacks, payload, context) {
+  const next = previousAttacks.map(item => {
+    if (item.id !== payload.attackId) {
+      return item;
+    }
+    return {
+      ...item,
+      sent: payload.sent,
+      total: payload.total,
+      status: payload.status || (payload.sent >= payload.total ? 'completed' : item.status),
+      updatedAt: Date.now(),
+      anomalousCount: item.anomalousCount + (payload.lastResult?.isAnomalous ? 1 : 0),
+    };
+  });
+
+  const exists = next.some(item => item.id === payload.attackId);
+  if (exists) {
+    return next;
+  }
+  return [buildAttackFromProgress(payload, context), ...next];
+}
+
+function appendLastResultIfMissing(previousResults, lastResult) {
+  if (!lastResult) {
+    return previousResults;
+  }
+  const exists = previousResults.some(item => item.id === lastResult.id);
+  if (exists) {
+    return previousResults;
+  }
+  return [...previousResults, lastResult];
+}
+
+function getProgressBadgeStyle(status) {
+  if (status === 'completed') {
+    return { borderColor: 'green.500', bg: 'rgba(34,197,94,0.1)' };
+  }
+  if (status === 'stopped') {
+    return { borderColor: 'orange.500', bg: 'rgba(249,115,22,0.1)' };
+  }
+  return { borderColor: 'blue.500', bg: 'rgba(59,130,246,0.1)' };
 }
 
 function filterResults(results, filters) {
@@ -194,7 +256,7 @@ function filterResults(results, filters) {
 }
 
 function IntruderPanel({ themeId }) {
-  const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
+  const sentinel = globalThis?.window?.sentinel || null;
   const urlRef = React.useRef(null);
   const headersRef = React.useRef(null);
   const bodyRef = React.useRef(null);
@@ -228,12 +290,12 @@ function IntruderPanel({ themeId }) {
   React.useEffect(() => {
     setPositionSources(prev => markers.map((marker, index) => ({
       marker,
-      source: prev[index] && prev[index].source ? prev[index].source : buildDefaultSource(marker),
+      source: prev[index]?.source || buildDefaultSource(marker),
     })));
   }, [url, headersText, body]);
 
   const loadAttacks = React.useCallback(async () => {
-    if (!sentinel || !sentinel.intruder || !sentinel.intruder.list) {
+    if (typeof sentinel?.intruder?.list !== 'function') {
       return;
     }
     const result = await sentinel.intruder.list();
@@ -245,7 +307,7 @@ function IntruderPanel({ themeId }) {
   }, [sentinel, selectedAttackId]);
 
   const loadResults = React.useCallback(async (attackId) => {
-    if (!sentinel || !sentinel.intruder || !attackId) {
+    if (!attackId || !sentinel?.intruder) {
       return;
     }
     setLoadingResults(true);
@@ -277,56 +339,28 @@ function IntruderPanel({ themeId }) {
   }, [attacks, sentinel]);
 
   React.useEffect(() => {
-    if (!sentinel || !sentinel.intruder) {
+    if (!sentinel?.intruder) {
       return undefined;
     }
 
     loadAttacks().catch(() => {});
+    const progressContext = {
+      attackType,
+      markersLength: markers.length,
+      method,
+      url,
+    };
+
     const unsubscribe = sentinel.intruder.onProgress((payload) => {
-      if (!payload || !payload.attackId) {
+      if (!payload?.attackId) {
         return;
       }
 
-      setAttacks(prev => {
-        const next = prev.map(item => item.id === payload.attackId
-          ? {
-            ...item,
-            sent: payload.sent,
-            total: payload.total,
-            status: payload.status || (payload.sent >= payload.total ? 'completed' : item.status),
-            updatedAt: Date.now(),
-            anomalousCount: item.anomalousCount + (payload.lastResult && payload.lastResult.isAnomalous ? 1 : 0),
-          }
-          : item);
-        const exists = next.some(item => item.id === payload.attackId);
-        if (!exists) {
-          return [
-            {
-              id: payload.attackId,
-              status: payload.status || 'running',
-              attackType: attackType,
-              positionCount: markers.length,
-              requestSummary: `${method} ${url}`,
-              sent: payload.sent,
-              total: payload.total,
-              anomalousCount: payload.lastResult && payload.lastResult.isAnomalous ? 1 : 0,
-              startedAt: Date.now(),
-              updatedAt: Date.now(),
-            },
-            ...next,
-          ];
-        }
-        return next;
-      });
+      setAttacks(prev => updateAttacksWithProgress(prev, payload, progressContext));
 
       if (payload.attackId === selectedAttackId) {
         setProgress({ sent: payload.sent, total: payload.total, status: payload.status || 'running' });
-        if (payload.lastResult) {
-          setResults(prev => {
-            const exists = prev.some(item => item.id === payload.lastResult.id);
-            return exists ? prev : [...prev, payload.lastResult];
-          });
-        }
+        setResults(prev => appendLastResultIfMissing(prev, payload.lastResult));
       }
     });
 
@@ -359,7 +393,7 @@ function IntruderPanel({ themeId }) {
   }
 
   async function startAttack() {
-    if (!sentinel || !sentinel.intruder) {
+    if (!sentinel?.intruder) {
       return;
     }
     if (markers.length === 0) {
@@ -397,12 +431,12 @@ function IntruderPanel({ themeId }) {
       setNoticeText('Intruder attack started.');
       await loadAttacks();
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to start intruder attack.');
+      setErrorText(error?.message || 'Unable to start intruder attack.');
     }
   }
 
   async function stopSelectedAttack() {
-    if (!sentinel || !sentinel.intruder || !selectedAttackId) {
+    if (!sentinel?.intruder || !selectedAttackId) {
       return;
     }
     setErrorText('');
@@ -419,6 +453,7 @@ function IntruderPanel({ themeId }) {
   const filteredResults = filterResults(sortResults(results, sortBy, sortDirection), filters);
   const selectedAttack = attacks.find(item => item.id === selectedAttackId) || null;
   const estimatedTotal = estimateAttackTotal(attackType, positionSources.map(entry => entry.source));
+  const progressBadgeStyle = getProgressBadgeStyle(progress.status);
 
   return (
     <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default'>
@@ -560,8 +595,8 @@ function IntruderPanel({ themeId }) {
                 <Badge 
                   variant='outline' 
                   color='var(--sentinel-fg-default)' 
-                  borderColor={progress.status === 'completed' ? 'green.500' : progress.status === 'stopped' ? 'orange.500' : 'blue.500'} 
-                  bg={progress.status === 'completed' ? 'rgba(34,197,94,0.1)' : progress.status === 'stopped' ? 'rgba(249,115,22,0.1)' : 'rgba(59,130,246,0.1)'}
+                  borderColor={progressBadgeStyle.borderColor} 
+                  bg={progressBadgeStyle.bg}
                 >
                   {progress.status}
                 </Badge>
@@ -630,5 +665,9 @@ function IntruderPanel({ themeId }) {
     </Box>
   );
 }
+
+IntruderPanel.propTypes = {
+  themeId: PropTypes.string,
+};
 
 export default IntruderPanel;
