@@ -917,6 +917,59 @@ function useContextRailBehavior(contextCollapsed, contextRailContentRef, context
   }, [contextCollapsed, contextRailContentRef, contextToggleButtonRef, quickActionButtonRefs, lastQuickActionIndexRef]);
 }
 
+class PanelErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      message: '',
+    };
+  }
+
+  static getDerivedStateFromError(error) {
+    return {
+      hasError: true,
+      message: error?.message || 'Unknown panel render error',
+    };
+  }
+
+  componentDidCatch(error, info) {
+    if (typeof this.props.onError === 'function') {
+      this.props.onError(error, info);
+    }
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, message: '' });
+  };
+
+  render() {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    const panelName = this.props.panelName || 'panel';
+    return (
+      <Flex h='100%' w='100%' align='center' justify='center' p='6'>
+        <VStack maxW='640px' spacing='3' align='stretch' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel' p='4'>
+          <Text fontWeight='semibold'>Unable to render {panelName}</Text>
+          <Text fontSize='sm' color='fg.muted'>The panel hit a runtime error. Use Reload Pane to remount this view.</Text>
+          <Code fontSize='xs' whiteSpace='pre-wrap' color='fg.default' bg='bg.subtle'>{this.state.message}</Code>
+          <HStack justify='flex-end'>
+            <Button size='xs' onClick={this.handleReload}>Reload Pane</Button>
+          </HStack>
+        </VStack>
+      </Flex>
+    );
+  }
+}
+
+PanelErrorBoundary.propTypes = {
+  children: PropTypes.node,
+  panelName: PropTypes.string,
+  onError: PropTypes.func,
+};
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 function App() {
   const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
@@ -1080,11 +1133,10 @@ function App() {
   const ActivePanel = modulePanels[activePane] || DashboardShell;
   const activeTheme = selectedTheme;
   const shellCodeProps = {
-    as: 'code',
-    bg: 'var(--sentinel-bg-subtle)',
-    color: 'var(--sentinel-fg-default)',
+    bg: 'bg.surface',
+    color: 'fg.default',
     borderWidth: '1px',
-    borderColor: 'var(--sentinel-border-default)',
+    borderColor: 'border.default',
     borderRadius: 'sm',
     px: '1.5',
     py: '0.5',
@@ -1139,9 +1191,10 @@ function App() {
               <Button
                 size='sm'
                 variant='ghost'
-                color={isActive ? 'var(--sentinel-fg-default)' : 'var(--sentinel-fg-muted)'}
-                bg={isActive ? 'var(--sentinel-bg-subtle)' : 'transparent'}
-                _hover={{ bg: 'bg.surface' }}
+                color={isActive ? 'fg.default' : 'fg.muted'}
+                bg={isActive ? 'bg.subtle' : 'transparent'}
+                _hover={{ bg: 'bg.surface', color: 'fg.default' }}
+                opacity={isActive ? 1 : 0.88}
                 w={sidebarExpanded ? '100%' : '44px'}
                 h='44px'
                 px={sidebarExpanded ? '3' : '0'}
@@ -1185,20 +1238,23 @@ function App() {
             <HStack gap='3' wrap='wrap' justify='flex-end'>
               <Badge 
                 variant='outline' 
-                color={proxyRunning ? 'var(--sentinel-fg-default)' : 'var(--sentinel-fg-muted)'} 
-                borderColor={proxyRunning ? 'green.500' : 'orange.500'} 
-                bg={proxyRunning ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)'}
+                color='fg.default'
+                borderColor='border.default'
+                bg='bg.surface'
               >
-                Proxy {proxyRunning ? 'running' : 'paused'}
+                <HStack gap='1'>
+                  <Box w='6px' h='6px' borderRadius='full' bg={proxyRunning ? 'green.400' : 'orange.400'} />
+                  <Text fontSize='xs'>Proxy {proxyRunning ? 'running' : 'paused'}</Text>
+                </HStack>
               </Badge>
-              <Button size='xs' variant='outline' onClick={() => setSettingsOpen(true)}>
+              <Button size='xs' variant='outline' color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }} onClick={() => setSettingsOpen(true)}>
                 <HStack gap='1'>
                   <FiSettings size={12} />
                   <Text fontSize='xs'>Settings</Text>
                 </HStack>
               </Button>
-              <Text fontSize='xs' color='fg.muted' fontFamily='body'>Project <Code {...shellCodeProps}>sentinel-dev</Code></Text>
-              <Text fontSize='xs' color='fg.muted' fontFamily='body'>Electron <Code {...shellCodeProps}>{versions.electron || 'unknown'}</Code></Text>
+              <Text fontSize='xs' color='fg.default' fontFamily='body'>Project <Code {...shellCodeProps}>sentinel-dev</Code></Text>
+              <Text fontSize='xs' color='fg.default' fontFamily='body'>Electron <Code {...shellCodeProps}>{versions.electron || 'unknown'}</Code></Text>
               <Button size='xs' variant='outline' onClick={() => setProxyRunning((prev) => !prev)}>
                 {proxyRunning ? 'Pause' : 'Resume'}
               </Button>
@@ -1240,7 +1296,16 @@ function App() {
 
           <Flex flex='1' overflow='hidden' p='3' gap='3'>
             <Box flex='1' minW='0' h='100%' borderWidth='1px' borderColor='border.subtle' borderRadius='sm' bg='bg.surface' overflow='hidden'>
-              <ActivePanel themeId={selectedThemeId} />
+              <PanelErrorBoundary
+                key={activePane}
+                panelName={activePane}
+                onError={(error, info) => {
+                  const detail = [error?.stack, info?.componentStack].filter(Boolean).join('\n');
+                  pushLog('error', 'renderer', `Module pane crashed: ${activePane}`, detail || error?.message || 'Unknown panel error');
+                }}
+              >
+                <ActivePanel themeId={selectedThemeId} />
+              </PanelErrorBoundary>
             </Box>
 
             <Box
@@ -1258,16 +1323,16 @@ function App() {
             >
               <VStack ref={contextRailContentRef} w='320px' minW='320px' align='stretch' gap='3' overflowY='auto' overflowX='hidden' p='3'>
                 <Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel'>
-                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading' color='var(--sentinel-fg-default)'>Active Context</Text>
-                  <Text fontSize='sm' mb='2' fontFamily='body' color='var(--sentinel-fg-muted)'>Pane <Box {...shellCodeProps}>{activePane}</Box></Text>
+                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading' color='fg.default'>Active Context</Text>
+                  <Text fontSize='sm' mb='2' fontFamily='body' color='fg.muted'>Pane <Code {...shellCodeProps}>{activePane}</Code></Text>
                   {(panelStatusFields[activePane] || []).map((field) => (
-                    <Text key={field.key} fontSize='sm' fontFamily='body' color='var(--sentinel-fg-muted)'>
-                      {field.label}: <Box {...shellCodeProps}>{String(panelStatus[activePane]?.[field.key] ?? '\u2014')}</Box>
+                    <Text key={field.key} fontSize='sm' fontFamily='body' color='fg.muted'>
+                      {field.label}: <Code {...shellCodeProps}>{String(panelStatus[activePane]?.[field.key] ?? '\u2014')}</Code>
                     </Text>
                   ))}
                 </Box>
                 <Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel'>
-                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading'>Quick Actions</Text>
+                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading' color='fg.default'>Quick Actions</Text>
                   <Stack gap='2'>
                     {contextQuickActions.map((action, index) => (
                       <Button

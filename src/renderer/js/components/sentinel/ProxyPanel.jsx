@@ -379,11 +379,17 @@ function ProxyPanel(props) {
 			<Flex px='3' py='2' borderBottomWidth='1px' borderColor='border.default' bg='bg.elevated' align='center' justify='space-between' flexShrink='0' wrap='wrap' gap='2'>
 				<HStack gap='3'>
 					<Text fontWeight='medium' fontSize='sm' color='fg.default'>Proxy</Text>
-					<Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={status.running ? 'green.500' : 'orange.500'} bg={status.running ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)'}>
-						{status.running ? 'Running' : 'Stopped'}
+					<Badge variant='outline' color='fg.default' borderColor='border.default' bg='bg.surface'>
+						<HStack gap='1'>
+							<Box w='6px' h='6px' borderRadius='full' bg={status.running ? 'green.400' : 'orange.400'} />
+							<Text fontSize='xs'>{status.running ? 'Running' : 'Stopped'}</Text>
+						</HStack>
 					</Badge>
-					<Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={status.intercepting ? 'purple.500' : 'blue.500'} bg={status.intercepting ? 'rgba(168,85,247,0.1)' : 'rgba(59,130,246,0.1)'}>
-						Intercept {status.intercepting ? 'On' : 'Off'}
+					<Badge variant='outline' color='fg.default' borderColor='border.default' bg='bg.surface'>
+						<HStack gap='1'>
+							<Box w='6px' h='6px' borderRadius='full' bg={status.intercepting ? 'green.400' : 'orange.400'} />
+							<Text fontSize='xs'>Intercept {status.intercepting ? 'On' : 'Off'}</Text>
+						</HStack>
 					</Badge>
 					<Text fontSize='xs' color='fg.muted'>Port <Code color='fg.default' bg='bg.subtle'>{status.port}</Code></Text>
 				</HStack>

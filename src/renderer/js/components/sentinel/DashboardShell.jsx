@@ -8,14 +8,14 @@ function MetricWidget(props) {
 
 	return (
 		<Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel' h='100%'>
-			<Text fontWeight='semibold' mb='3' fontSize='xs' color='var(--sentinel-fg-default)' textTransform='uppercase' letterSpacing='wider'>
+			<Text fontWeight='semibold' mb='3' fontSize='xs' color='fg.default' textTransform='uppercase' letterSpacing='wider'>
 				{title}
 			</Text>
 			<VStack align='stretch' gap='2'>
 				{metrics.map(({ label, value }) => (
 					<Flex key={label} justify='space-between' align='center'>
-						<Text fontSize='sm' color='var(--sentinel-fg-muted)'>{label}</Text>
-						<Code fontSize='sm' color='var(--sentinel-fg-default)' bg='var(--sentinel-bg-subtle)'>{String(value)}</Code>
+						<Text fontSize='sm' color='fg.muted'>{label}</Text>
+						<Code fontSize='sm' color='fg.default' bg='bg.subtle'>{String(value)}</Code>
 					</Flex>
 				))}
 			</VStack>
@@ -147,7 +147,7 @@ function DashboardShell() {
 
 	return (
 		<Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' bg='bg.canvas' color='fg.default'>
-			<Heading size='sm' mb='4'>Dashboard</Heading>
+			<Heading size='sm' mb='4' color='fg.default'>Dashboard</Heading>
 			<Grid templateColumns='repeat(3, 1fr)' gap='4' mb='4'>
 				<MetricWidget title='Security Metrics' metrics={securityMetrics} />
 				<MetricWidget title='Recent Traffic' metrics={trafficMetrics} />
@@ -164,7 +164,7 @@ function DashboardShell() {
 						borderBottomWidth={guidanceOpen ? '1px' : '0'}
 						borderColor='border.default'
 					>
-						<Text fontWeight='semibold' fontSize='sm'>CA Trust Guidance</Text>
+						<Text fontWeight='semibold' fontSize='sm' color='fg.default'>CA Trust Guidance</Text>
 						<Button size='xs' variant='outline' onClick={() => setGuidanceOpen((prev) => !prev)}>
 							{guidanceOpen ? 'Hide' : 'Show'}
 						</Button>

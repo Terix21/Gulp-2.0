@@ -76,7 +76,7 @@ describe('SEN-020 embedded browser service', () => {
     const first = browser.createSession({ name: 'One' });
     const second = browser.createSession({ name: 'Two' });
 
-    expect(first.hostModel).toBe('BrowserView');
+    expect(first.hostModel).toBe('WebContentsView');
     expect(first.hostPartition).toBe(`sentinel-browser-${first.id}`);
     expect(first.security.contextIsolation).toBe(true);
     expect(first.focused).toBe(true);

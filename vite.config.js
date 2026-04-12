@@ -60,6 +60,10 @@ module.exports = defineConfig({
           dest: '../contracts',
         },
         {
+          src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'renderer-console.js')),
+          dest: '../main',
+        },
+        {
           src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'certs', '**/*')),
           dest: '../main/certs',
         },

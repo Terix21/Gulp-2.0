@@ -16,10 +16,7 @@ import TargetMapPanel from '../TargetMapPanel.jsx';
 import ExtensionsPanel from '../ExtensionsPanel.jsx';
 import EmbeddedBrowserPanel from '../EmbeddedBrowserPanel.jsx';
 
-// Use CJS require so ChakraProvider shares the same module instance as the
-// panel components (which also use CJS require). ESM/CJS module splitting
-// otherwise creates two separate React Context objects.
-const { ChakraProvider, defaultSystem } = require('@chakra-ui/react');
+import { ChakraProvider, defaultSystem } from '@chakra-ui/react';
 
 // Wrap renders with ChakraProvider so Chakra's context hooks resolve correctly.
 function renderWithChakra(ui) {
@@ -301,7 +298,7 @@ describe('Sentinel UI Panel Components', () => {
         url: 'https://sentinel.test',
       }));
 
-      fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+      fireEvent.click(screen.getByRole('button', { name: '↻' }));
       await waitFor(() => expect(browserApi.reload).toHaveBeenCalledWith({ sessionId: 'sess-1' }));
 
       rectSpy.mockRestore();
