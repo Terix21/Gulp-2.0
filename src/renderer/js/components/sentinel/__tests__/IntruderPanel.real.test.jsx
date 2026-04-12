@@ -26,7 +26,7 @@ describe('IntruderPanel real interactions', () => {
       }),
     };
 
-    window.sentinel = {
+    globalThis.window.sentinel = {
       intruder: intruderApi,
     };
   });

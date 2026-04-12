@@ -8,6 +8,7 @@ AC 5: Side-by-side compare between two sends.
 */
 
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
 	Badge,
 	Box,
@@ -21,7 +22,8 @@ import {
 	Textarea,
 	VStack,
 } from '@chakra-ui/react';
-import { getStatusTextColor } from './theme-utils';
+import MonacoEditor from '@monaco-editor/react';
+import { getStatusTextColor, getMonacoTheme } from './theme-utils';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,11 +76,32 @@ function toHex(base64) {
 	}
 }
 
+function labelForSend(send) {
+	if (!send) {
+		return '';
+	}
+	return `${send.request.method} ${send.request.path || send.request.url || '/'} — ${new Date(send.sentAt).toLocaleTimeString()}`;
+}
+
+function bodyOfSend(send) {
+	if (!send?.response) {
+		return '[none]';
+	}
+	if (send.response.body !== undefined && send.response.body !== null) {
+		return String(send.response.body);
+	}
+	if (send.response.rawBodyBase64) {
+		return `[binary ${send.response.bodyLength} bytes]`;
+	}
+	return '[empty]';
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function ResponseViewer({ response }) {
+function ResponseViewer(props) {
+	const { response, themeId } = props;
 	const [view, setView] = React.useState('raw');
 
 	if (!response) {
@@ -89,27 +112,43 @@ function ResponseViewer({ response }) {
 		);
 	}
 
-	const statusColor = response.statusCode < 300 ? 'green' : response.statusCode < 400 ? 'blue' : 'red';
-	const rawText = response.body != null
-		? String(response.body)
-		: response.rawBodyBase64
-			? `[binary ${response.bodyLength || 0} bytes]`
-			: '[empty body]';
+	let statusColor = 'red';
+	if (response.statusCode < 300) {
+		statusColor = 'green';
+	} else if (response.statusCode < 400) {
+		statusColor = 'blue';
+	}
+
+	let rawText = '[empty body]';
+	if (response.body !== undefined && response.body !== null) {
+		rawText = String(response.body);
+	} else if (response.rawBodyBase64) {
+		rawText = `[binary ${response.bodyLength || 0} bytes]`;
+	}
 
 	const hexText = toHex(response.rawBodyBase64);
-	const renderedHtml = response.contentType && response.contentType.includes('html') && response.body
+	const renderedHtml = response.contentType?.includes('html') && response.body
 		? response.body
 		: null;
+	const hasTiming = Number.isFinite(response.timings?.total);
+	const timingText = hasTiming ? ` · ${response.timings.total}ms` : '';
+
+	const statusColorMap = {
+		green: { border: 'green.500', bg: 'rgba(34,197,94,0.1)' },
+		blue: { border: 'blue.500', bg: 'rgba(59,130,246,0.1)' },
+		red: { border: 'red.500', bg: 'rgba(239,68,68,0.1)' }
+	};
+	const badgeStyles = statusColorMap[statusColor] || statusColorMap.blue;
 
 	return (
 		<Box borderWidth='1px' borderRadius='md' p={3}>
 			<HStack mb={2} wrap='wrap'>
-				<Badge colorPalette={statusColor}>
+				<Badge variant='outline' color='var(--sentinel-fg-default)' borderColor={badgeStyles.border} bg={badgeStyles.bg}>
 					{response.statusCode} {response.statusMessage}
 				</Badge>
 				<Text fontSize='xs' color='fg.muted'>
 					{response.contentType || 'unknown'} · {response.bodyLength || 0} bytes
-					{response.timings ? ` · ${response.timings.total}ms` : ''}
+					{timingText}
 				</Text>
 			</HStack>
 			<HStack mb={2}>
@@ -119,24 +158,24 @@ function ResponseViewer({ response }) {
 						size='xs'
 						variant={view === mode ? 'solid' : 'ghost'}
 						onClick={() => setView(mode)}
+						color={view === mode ? 'fg.default' : 'fg.muted'}
+						bg={view === mode ? 'bg.subtle' : 'bg.surface'}
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle', color: 'fg.default' }}
 					>
 						{mode.charAt(0).toUpperCase() + mode.slice(1)}
 					</Button>
 				))}
 			</HStack>
 			{view === 'raw' && (
-				<Box
-					as='pre'
-					fontSize='xs'
-					fontFamily='mono'
-					whiteSpace='pre-wrap'
-					overflowY='auto'
-					maxH='240px'
-					p={2}
-					borderWidth='1px'
-					borderRadius='sm'
-				>
-					{rawText}
+				<Box flex='1' minH='240px' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
+					<MonacoEditor
+						height='240px'
+						defaultLanguage='http'
+						theme={getMonacoTheme(themeId)}
+						value={rawText}
+						options={{ readOnly: true, minimap: { enabled: false }, wordWrap: 'on', fontSize: 12 }}
+					/>
 				</Box>
 			)}
 			{view === 'hex' && (
@@ -188,15 +227,31 @@ function ResponseViewer({ response }) {
 	);
 }
 
+ResponseViewer.propTypes = {
+	response: PropTypes.shape({
+		statusCode: PropTypes.number,
+		statusMessage: PropTypes.string,
+		body: PropTypes.any,
+		rawBodyBase64: PropTypes.string,
+		bodyLength: PropTypes.number,
+		contentType: PropTypes.string,
+		timings: PropTypes.shape({
+			total: PropTypes.number,
+		}),
+	}),
+	themeId: PropTypes.string,
+};
+
 // ---------------------------------------------------------------------------
 // CompareView – AC 5
 // ---------------------------------------------------------------------------
 
-function CompareView({ sends }) {
+function CompareView(props) {
+	const { sends } = props;
 	const [idA, setIdA] = React.useState('');
 	const [idB, setIdB] = React.useState('');
 
-	if (!sends || sends.length < 2) {
+	if (sends.length < 2) {
 		return (
 			<Box borderWidth='1px' borderRadius='md' p={3}>
 				<Text color='fg.muted' fontSize='sm'>Send at least 2 requests to compare.</Text>
@@ -207,53 +262,41 @@ function CompareView({ sends }) {
 	const sendA = sends.find(s => s.id === idA);
 	const sendB = sends.find(s => s.id === idB);
 
-	function labelFor(send) {
-		if (!send) {
-			return '';
-		}
-		return `${send.request.method} ${send.request.path || send.request.url || '/'} — ${new Date(send.sentAt).toLocaleTimeString()}`;
-	}
-
-	function bodyOf(send) {
-		if (!send || !send.response) {
-			return '[none]';
-		}
-		return send.response.body != null
-			? String(send.response.body)
-			: send.response.rawBodyBase64
-				? `[binary ${send.response.bodyLength} bytes]`
-				: '[empty]';
-	}
-
 	return (
 		<Box borderWidth='1px' borderRadius='md' p={3}>
 			<Text fontWeight='semibold' fontSize='sm' mb={2}>Compare Sends</Text>
 			<HStack mb={3} align='flex-start' wrap='wrap'>
 				<Box flex='1' minW='200px'>
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send A</Text>
-					<select
+					<Select
+						size='xs'
 						value={idA}
 						onChange={e => setIdA(e.target.value)}
-						style={{ width: '100%', fontSize: '12px', padding: '2px 4px' }}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
-							<option key={s.id} value={s.id}>{labelFor(s)}</option>
+							<option key={s.id} value={s.id}>{labelForSend(s)}</option>
 						))}
-					</select>
+					</Select>
 				</Box>
 				<Box flex='1' minW='200px'>
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send B</Text>
-					<select
+					<Select
+						size='xs'
 						value={idB}
 						onChange={e => setIdB(e.target.value)}
-						style={{ width: '100%', fontSize: '12px', padding: '2px 4px' }}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
-							<option key={s.id} value={s.id}>{labelFor(s)}</option>
+							<option key={s.id} value={s.id}>{labelForSend(s)}</option>
 						))}
-					</select>
+					</Select>
 				</Box>
 			</HStack>
 			{(idA || idB) && (
@@ -265,7 +308,7 @@ function CompareView({ sends }) {
 									A — {sendA.response && `${sendA.response.statusCode} · ${sendA.response.bodyLength}b · ${sendA.response.timings ? sendA.response.timings.total + 'ms' : ''}`}
 								</Text>
 								<Box as='pre' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflowY='auto' maxH='200px' p={2} borderWidth='1px' borderRadius='sm'>
-									{bodyOf(sendA)}
+									{bodyOfSend(sendA)}
 								</Box>
 							</>
 						)}
@@ -277,7 +320,7 @@ function CompareView({ sends }) {
 									B — {sendB.response && `${sendB.response.statusCode} · ${sendB.response.bodyLength}b · ${sendB.response.timings ? sendB.response.timings.total + 'ms' : ''}`}
 								</Text>
 								<Box as='pre' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflowY='auto' maxH='200px' p={2} borderWidth='1px' borderRadius='sm'>
-									{bodyOf(sendB)}
+									{bodyOfSend(sendB)}
 								</Box>
 							</>
 						)}
@@ -288,11 +331,33 @@ function CompareView({ sends }) {
 	);
 }
 
+CompareView.propTypes = {
+	sends: PropTypes.arrayOf(PropTypes.shape({
+		id: PropTypes.string,
+		sentAt: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+		request: PropTypes.shape({
+			method: PropTypes.string,
+			path: PropTypes.string,
+			url: PropTypes.string,
+		}),
+		response: PropTypes.shape({
+			statusCode: PropTypes.number,
+			bodyLength: PropTypes.number,
+			body: PropTypes.any,
+			rawBodyBase64: PropTypes.string,
+			timings: PropTypes.shape({
+				total: PropTypes.number,
+			}),
+		}),
+	})).isRequired,
+};
+
 // ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
-function RepeaterPanel({ themeId }) {
+function RepeaterPanel(props) {
+	const { themeId } = props;
 	// Sidebar
 	const [entries, setEntries] = React.useState([]);
 	const [selectedEntryId, setSelectedEntryId] = React.useState('');
@@ -310,11 +375,11 @@ function RepeaterPanel({ themeId }) {
 	const [sending, setSending] = React.useState(false);
 	const [errorText, setErrorText] = React.useState('');
 
-	const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
+	const sentinel = globalThis?.window?.sentinel || null;
 
 	// Load sidebar entries on mount
 	React.useEffect(() => {
-		if (!sentinel || !sentinel.repeater) {
+		if (!sentinel?.repeater) {
 			return;
 		}
 		sentinel.repeater.historyList().then(result => {
@@ -323,8 +388,13 @@ function RepeaterPanel({ themeId }) {
 	}, []);
 
 	React.useEffect(() => {
+		const appWindow = globalThis?.window;
+		if (!appWindow) {
+			return undefined;
+		}
+
 		function handleHandoff(event) {
-			const request = event && event.detail ? event.detail.request : null;
+			const request = event?.detail?.request || null;
 			if (!request) {
 				return;
 			}
@@ -339,14 +409,14 @@ function RepeaterPanel({ themeId }) {
 			setErrorText('');
 		}
 
-		window.addEventListener('sentinel:repeater-handoff', handleHandoff);
+		appWindow.addEventListener('sentinel:repeater-handoff', handleHandoff);
 		return () => {
-			window.removeEventListener('sentinel:repeater-handoff', handleHandoff);
+			appWindow.removeEventListener('sentinel:repeater-handoff', handleHandoff);
 		};
 	}, []);
 
 	async function loadEntry(id) {
-		if (!sentinel || !sentinel.repeater) {
+		if (!sentinel?.repeater) {
 			return;
 		}
 		try {
@@ -368,7 +438,7 @@ function RepeaterPanel({ themeId }) {
 	}
 
 	async function handleSend() {
-		if (!sentinel || !sentinel.repeater) {
+		if (!sentinel?.repeater) {
 			return;
 		}
 		setErrorText('');
@@ -388,7 +458,7 @@ function RepeaterPanel({ themeId }) {
 			const listResult = await sentinel.repeater.historyList();
 			setEntries(Array.isArray(listResult.items) ? listResult.items : []);
 
-			const entryId = result.entry ? result.entry.id : selectedEntryId;
+			const entryId = result.entry?.id || selectedEntryId;
 			if (entryId) {
 				setSelectedEntryId(entryId);
 				const fullEntry = await sentinel.repeater.get({ id: entryId });
@@ -397,7 +467,7 @@ function RepeaterPanel({ themeId }) {
 				}
 			}
 		} catch (error) {
-			setErrorText(error && error.message ? `Send failed: ${error.message}` : 'Send failed.');
+			setErrorText(error?.message || 'Send failed.');
 		} finally {
 			setSending(false);
 		}
@@ -419,9 +489,9 @@ function RepeaterPanel({ themeId }) {
 		<Box p={4} h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='md'>
 			<VStack align='stretch' spacing={3}>
 				<Flex justify='space-between' align='center' mb='3' pb='3' borderBottomWidth='1px' borderColor='border.default'>
-					<Text fontWeight='medium' fontSize='sm'>Repeater</Text>
+					<Text fontWeight='medium' fontSize='sm' color='fg.default'>Repeater</Text>
 					<HStack gap='2'>
-						<Button size='xs' variant='outline' onClick={clearEditor}>New Request</Button>
+						<Button size='xs' variant='outline' onClick={clearEditor} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>New Request</Button>
 					</HStack>
 				</Flex>
 
@@ -443,8 +513,8 @@ function RepeaterPanel({ themeId }) {
 									textOverflow='ellipsis'
 									onClick={() => loadEntry(entry.id)}
 								>
-									{(entry.request && entry.request.method) || 'GET'}{' '}
-									{(entry.request && (entry.request.url || entry.request.path)) || '/'}
+									{entry.request?.method || 'GET'}{' '}
+									{entry.request?.url || entry.request?.path || '/'}
 								</Button>
 							))}
 						</VStack>
@@ -463,6 +533,10 @@ function RepeaterPanel({ themeId }) {
 									placeholder='GET'
 									fontFamily='mono'
 									textTransform='uppercase'
+									color='fg.default'
+									bg='bg.surface'
+									borderColor='border.default'
+									_placeholder={{ color: 'fg.muted' }}
 								/>
 								<Input
 									size='sm'
@@ -471,6 +545,10 @@ function RepeaterPanel({ themeId }) {
 									onChange={e => setEditUrl(e.target.value)}
 									placeholder='https://example.com/path'
 									fontFamily='mono'
+									color='fg.default'
+									bg='bg.surface'
+									borderColor='border.default'
+									_placeholder={{ color: 'fg.muted' }}
 								/>
 								<Button
 									size='sm'
@@ -492,6 +570,10 @@ function RepeaterPanel({ themeId }) {
 								rows={4}
 								fontFamily='mono'
 								fontSize='xs'
+								color='fg.default'
+								bg='bg.surface'
+								borderColor='border.default'
+								_placeholder={{ color: 'fg.muted' }}
 							/>
 
 							{/* Body */}
@@ -503,12 +585,16 @@ function RepeaterPanel({ themeId }) {
 								rows={5}
 								fontFamily='mono'
 								fontSize='xs'
+								color='fg.default'
+								bg='bg.surface'
+								borderColor='border.default'
+								_placeholder={{ color: 'fg.muted' }}
 							/>
 
 							{errorText && <Text color={getStatusTextColor('error', themeId)} fontSize='sm'>{errorText}</Text>}
 
 							{/* Response viewer — AC 3 */}
-							<ResponseViewer response={response} />
+							<ResponseViewer response={response} themeId={themeId} />
 
 							{/* Send history for this entry — AC 4 */}
 							{activeSends.length > 0 && (
@@ -521,6 +607,10 @@ function RepeaterPanel({ themeId }) {
 											size='xs'
 											variant='outline'
 											onClick={() => setCompareOpen(prev => !prev)}
+											color='fg.default'
+											bg='bg.surface'
+											borderColor='border.default'
+											_hover={{ bg: 'bg.subtle' }}
 										>
 											{compareOpen ? 'Hide Compare' : 'Compare…'}
 										</Button>
@@ -532,14 +622,14 @@ function RepeaterPanel({ themeId }) {
 													{send.request.method}{' '}
 													{send.request.path || send.request.url || '/'}{' '}
 													→{' '}
-													<Code fontSize='xs'>
-														{send.response && send.response.statusCode}
+													<Code fontSize='xs' color='fg.default' bg='bg.subtle'>
+														{send.response?.statusCode}
 													</Code>
 												</Text>
 												<Text fontSize='xs' color='fg.muted'>
-													{send.response && send.response.bodyLength}b
+													{send.response?.bodyLength}b
 													{' '}
-													{send.response && send.response.timings
+													{send.response?.timings
 														? `${send.response.timings.total}ms`
 														: ''}
 												</Text>
@@ -559,5 +649,8 @@ function RepeaterPanel({ themeId }) {
 	);
 }
 
-export default RepeaterPanel;
+RepeaterPanel.propTypes = {
+	themeId: PropTypes.string,
+};
 
+export default RepeaterPanel;

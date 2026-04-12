@@ -61,10 +61,7 @@ describe('Electron Main Process', () => {
   });
 
   it('should setup app lifecycle handlers', () => {
-    const handlers = [];
-    handlers.push('whenReady');
-    handlers.push('activate');
-    handlers.push('window-all-closed');
+    const handlers = ['whenReady', 'activate', 'window-all-closed'];
     
     expect(handlers).toHaveLength(3);
     expect(handlers).toContain('activate');

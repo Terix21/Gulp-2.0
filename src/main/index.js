@@ -18,6 +18,7 @@ const decoderService = require('./proxy/decoder-service');
 const extensionHost = require('./proxy/extension-host');
 const { registerProxyHandlers } = require('./proxy/proxy-ipc');
 const { registerBrowserHandlers } = require('./proxy/browser-ipc');
+const { mapRendererConsoleSeverity, normalizeRendererConsoleMessageArgs } = require('./renderer-console');
 
 function configureElectronStoragePaths() {
   try {
@@ -501,20 +502,22 @@ function createWindow () {
       `code=${code} mainFrame=${Boolean(isMainFrame)} url=${url || 'n/a'} reason=${description || 'unknown'}`,
     );
   });
-  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    let severity = 'info';
-    if (level === 1) {
-      severity = 'warn';
-    } else if (level === 2) {
-      severity = 'error';
-    } else if (level === 3) {
-      severity = 'debug';
-    }
+  mainWindow.webContents.on('console-message', (...args) => {
+    const {
+      level,
+      message,
+      line,
+      sourceId,
+    } = normalizeRendererConsoleMessageArgs(args);
+    const severity = mapRendererConsoleSeverity(level);
+    const normalizedSeverity = severity === 'warn' || severity === 'error' || severity === 'info'
+      ? severity
+      : 'info';
 
     sendConsoleLog(
-      severity,
+      normalizedSeverity,
       'renderer',
-      message,
+      String(message || ''),
       `source=${sourceId || 'unknown'} line=${Number.isFinite(line) ? line : 'n/a'}`,
     );
   });

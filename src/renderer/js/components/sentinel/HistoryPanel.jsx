@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import {
 	Box,
 	Button,
@@ -26,12 +27,76 @@ function toHex(base64) {
 		const raw = atob(base64);
 		const parts = [];
 		for (let index = 0; index < raw.length; index += 1) {
-			parts.push(raw.charCodeAt(index).toString(16).padStart(2, '0'));
+			parts.push((raw.codePointAt(index) ?? 0).toString(16).padStart(2, '0'));
 		}
 		return parts.join(' ');
 	} catch {
 		return '';
 	}
+}
+
+function buildQueryFilter(rawFilters) {
+	const hostValue = String(rawFilters.host || '').trim();
+	const pathValue = String(rawFilters.path || '').trim();
+	const methodValue = String(rawFilters.method || '').trim().toUpperCase();
+	const statusCodeValue = String(rawFilters.statusCode || '').trim();
+	const parsedStatus = statusCodeValue ? Number(statusCodeValue) : null;
+
+	return {
+		host: hostValue || undefined,
+		path: pathValue || undefined,
+		method: methodValue || undefined,
+		statusCode: Number.isFinite(parsedStatus) ? parsedStatus : undefined,
+	};
+}
+
+function matchesActiveFilters(item, filter) {
+	const request = item?.request || {};
+	const response = item?.response || {};
+
+	if (filter.method && String(request.method || '').toUpperCase() !== String(filter.method).toUpperCase()) {
+		return false;
+	}
+
+	if (filter.host && !String(request.host || '').toLowerCase().includes(String(filter.host).toLowerCase())) {
+		return false;
+	}
+
+	if (filter.path && !String(request.path || '').startsWith(String(filter.path))) {
+		return false;
+	}
+
+	if (typeof filter.statusCode === 'number' && response.statusCode !== filter.statusCode) {
+		return false;
+	}
+
+	return true;
+}
+
+function mergeBufferedItems(previousItems, pendingItems, limit) {
+	const mergedById = new Map();
+	for (const collection of [pendingItems, previousItems]) {
+		for (const item of collection) {
+			if (!item || mergedById.has(item.id)) {
+				continue;
+			}
+			mergedById.set(item.id, item);
+		}
+	}
+	return Array.from(mergedById.values()).slice(0, limit);
+}
+
+function getInspectorTabLabel(tabName) {
+	if (tabName === 'raw') {
+		return 'Raw';
+	}
+	if (tabName === 'preview') {
+		return 'Preview';
+	}
+	if (tabName === 'hex') {
+		return 'Hex';
+	}
+	return 'Headers';
 }
 
 function buildRawRequest(request = {}) {
@@ -71,19 +136,28 @@ function InspectorSection({ item, inspectorTab, setInspectorTab, onSendToRepeate
 	const response = item.response || {};
 	const headersEntries = Object.entries(response.headers || request.headers || {});
 	const previewHtml = response.contentType && String(response.contentType).includes('html') ? response.body : null;
-	const hexText = response.rawBodyBase64 ? toHex(response.rawBodyBase64) : (request.rawBodyBase64 ? toHex(request.rawBodyBase64) : '');
+	let hexText = '';
+	if (response.rawBodyBase64) {
+		hexText = toHex(response.rawBodyBase64);
+	} else if (request.rawBodyBase64) {
+		hexText = toHex(request.rawBodyBase64);
+	}
 	const rawText = response.statusCode ? buildRawResponse(response) : buildRawRequest(request);
+	const previewFallbackText = response.body || request.body || '[No previewable content]';
+	const previewContent = previewHtml
+		? <Box as='iframe' sandbox='' srcDoc={previewHtml} title='Preview' w='100%' h='100%' border='0' />
+		: <Box as='pre' p='3' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflow='auto' h='100%'>{previewFallbackText}</Box>;
 
 	return (
 		<VStack align='stretch' h='100%' gap='3' p='3'>
 			<HStack justify='space-between' wrap='wrap'>
 				<Box>
-					<Text fontWeight='semibold'>{request.method || 'GET'} {request.host || 'unknown-host'}{request.path || '/'}</Text>
-					<Text fontSize='xs' color='fg.muted'>Status <Code>{String(response.statusCode || 'pending')}</Code></Text>
+					<Text fontWeight='semibold' color='fg.default'>{request.method || 'GET'} {request.host || 'unknown-host'}{request.path || '/'}</Text>
+					<Text fontSize='xs' color='fg.muted'>Status <Code color='fg.default' bg='bg.subtle'>{String(response.statusCode || 'pending')}</Code></Text>
 				</Box>
 				<HStack>
-					<Button size='xs' variant='outline' onClick={onSendToRepeater}>Send to Repeater</Button>
-					<Button size='xs' variant='outline' onClick={onSendToIntruder}>Send to Intruder</Button>
+					<Button size='xs' variant='outline' onClick={onSendToRepeater} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Repeater</Button>
+					<Button size='xs' variant='outline' onClick={onSendToIntruder} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Send to Intruder</Button>
 				</HStack>
 			</HStack>
 			<HStack>
@@ -93,18 +167,22 @@ function InspectorSection({ item, inspectorTab, setInspectorTab, onSendToRepeate
 						size='xs'
 						variant={inspectorTab === tabName ? 'solid' : 'outline'}
 						onClick={() => setInspectorTab(tabName)}
+						color={inspectorTab === tabName ? 'fg.default' : 'fg.muted'}
+						bg={inspectorTab === tabName ? 'bg.subtle' : 'bg.surface'}
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle', color: 'fg.default' }}
 					>
-						{tabName === 'raw' ? 'Raw' : tabName === 'preview' ? 'Preview' : tabName === 'hex' ? 'Hex' : 'Headers'}
+						{getInspectorTabLabel(tabName)}
 					</Button>
 				))}
 			</HStack>
-			<Box flex='1' minH='0' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
+			<Box flex='1' minH='0' borderWidth='1px' borderRadius='sm' borderColor='border.default' bg='bg.surface' overflow='hidden'>
 				{inspectorTab === 'headers' ? (
 					<VStack align='stretch' gap='1' p='3' overflowY='auto' h='100%'>
 						{headersEntries.length === 0 ? <Text fontSize='sm' color='fg.muted'>No headers available.</Text> : null}
 						{headersEntries.map(([key, value]) => (
 							<Flex key={key} justify='space-between' gap='3' fontSize='sm'>
-								<Code>{key}</Code>
+								<Code color='fg.default' bg='bg.subtle'>{key}</Code>
 								<Text color='fg.muted' textAlign='right'>{String(value)}</Text>
 							</Flex>
 						))}
@@ -120,13 +198,7 @@ function InspectorSection({ item, inspectorTab, setInspectorTab, onSendToRepeate
 					/>
 				) : null}
 				{inspectorTab === 'preview' ? (
-					previewHtml ? (
-						<Box as='iframe' sandbox='' srcDoc={previewHtml} title='Preview' w='100%' h='100%' border='0' />
-					) : (
-						<Box as='pre' p='3' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflow='auto' h='100%'>
-							{response.body || request.body || '[No previewable content]'}
-						</Box>
-					)
+					previewContent
 				) : null}
 				{inspectorTab === 'hex' ? (
 					<Box as='pre' p='3' fontSize='xs' fontFamily='mono' whiteSpace='pre-wrap' overflow='auto' h='100%'>
@@ -145,7 +217,7 @@ function VirtualizedHistoryTable({ table, selectedId, onSelect }) {
 		<Box h='100%' display='flex' flexDirection='column'>
 			<Flex px='2' py='2' borderBottomWidth='1px' borderColor='border.default' fontSize='xs' color='fg.muted' fontFamily='mono'>
 				{table.getFlatHeaders().map((header) => (
-					<Box key={header.id} flex={header.column.columnDef.meta && header.column.columnDef.meta.flex ? header.column.columnDef.meta.flex : '1'} px='2'>
+					<Box key={header.id} flex={header.column.columnDef.meta?.flex || '1'} px='2'>
 						{flexRender(header.column.columnDef.header, header.getContext())}
 					</Box>
 				))}
@@ -174,7 +246,7 @@ function VirtualizedHistoryTable({ table, selectedId, onSelect }) {
 								onClick={() => onSelect(row.original.id)}
 							>
 								{row.getVisibleCells().map((cell) => (
-									<Box key={cell.id} flex={cell.column.columnDef.meta && cell.column.columnDef.meta.flex ? cell.column.columnDef.meta.flex : '1'} px='2' overflow='hidden' textOverflow='ellipsis' whiteSpace='nowrap'>
+									<Box key={cell.id} flex={cell.column.columnDef.meta?.flex || '1'} px='2' overflow='hidden' textOverflow='ellipsis' whiteSpace='nowrap'>
 										{flexRender(cell.column.columnDef.cell, cell.getContext())}
 									</Box>
 								))}
@@ -193,7 +265,7 @@ function HistoryPanel({ themeId }) {
 	const [errorText, setErrorText] = React.useState('');
 	const [noticeText, setNoticeText] = React.useState('');
 	const [page, setPage] = React.useState(0);
-	const [pageSize, setPageSize] = React.useState(250);
+	const [pageSize] = React.useState(250);
 	const [total, setTotal] = React.useState(0);
 	const [selectedId, setSelectedId] = React.useState('');
 	const [inspectorTab, setInspectorTab] = React.useState('headers');
@@ -207,52 +279,15 @@ function HistoryPanel({ themeId }) {
 	const refreshTimerRef = React.useRef(null);
 	const refreshPendingRef = React.useRef(false);
 	const bufferedItemsRef = React.useRef([]);
+	const itemsRef = React.useRef([]);
 	const knownIdsRef = React.useRef(new Set());
 	const activeFilterRef = React.useRef({});
 	const pageRef = React.useRef(0);
 	const pageSizeRef = React.useRef(250);
 
-	function buildQueryFilter(rawFilters) {
-		const hostValue = String(rawFilters.host || '').trim();
-		const pathValue = String(rawFilters.path || '').trim();
-		const methodValue = String(rawFilters.method || '').trim().toUpperCase();
-		const statusCodeValue = String(rawFilters.statusCode || '').trim();
-		const parsedStatus = statusCodeValue ? Number(statusCodeValue) : null;
-
-		return {
-			host: hostValue || undefined,
-			path: pathValue || undefined,
-			method: methodValue || undefined,
-			statusCode: Number.isFinite(parsedStatus) ? parsedStatus : undefined,
-		};
-	}
-
-	function matchesActiveFilters(item, filter) {
-		const request = item && item.request ? item.request : {};
-		const response = item && item.response ? item.response : {};
-
-		if (filter.method && String(request.method || '').toUpperCase() !== String(filter.method).toUpperCase()) {
-			return false;
-		}
-
-		if (filter.host && !String(request.host || '').toLowerCase().includes(String(filter.host).toLowerCase())) {
-			return false;
-		}
-
-		if (filter.path && !String(request.path || '').startsWith(String(filter.path))) {
-			return false;
-		}
-
-		if (typeof filter.statusCode === 'number' && response.statusCode !== filter.statusCode) {
-			return false;
-		}
-
-		return true;
-	}
-
 	const loadHistory = React.useCallback(async (nextPage = 0) => {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.history) {
+		const sentinel = globalThis?.window?.sentinel;
+		if (!sentinel?.history) {
 			setLoading(false);
 			return;
 		}
@@ -289,31 +324,35 @@ function HistoryPanel({ themeId }) {
 	}, [loadHistory]);
 
 	React.useEffect(() => {
+		itemsRef.current = items;
+	}, [items]);
+
+	React.useEffect(() => {
 		activeFilterRef.current = buildQueryFilter(filters);
 		pageRef.current = page;
 		pageSizeRef.current = pageSize;
 	}, [filters, page, pageSize]);
 
 	const columns = React.useMemo(() => ([
-		columnHelper.accessor(row => row.request && row.request.method ? row.request.method : 'GET', {
+		columnHelper.accessor(row => row.request?.method || 'GET', {
 			id: 'method',
 			header: 'METHOD',
 			cell: info => info.getValue(),
 			meta: { flex: '0 0 72px' },
 		}),
-		columnHelper.accessor(row => row.request && row.request.host ? row.request.host : 'unknown-host', {
+		columnHelper.accessor(row => row.request?.host || 'unknown-host', {
 			id: 'host',
 			header: 'HOST',
 			cell: info => info.getValue(),
 			meta: { flex: '0 0 180px' },
 		}),
-		columnHelper.accessor(row => row.request && row.request.path ? row.request.path : '/', {
+		columnHelper.accessor(row => row.request?.path || '/', {
 			id: 'path',
 			header: 'PATH',
 			cell: info => info.getValue(),
 			meta: { flex: '1' },
 		}),
-		columnHelper.accessor(row => row.response && row.response.statusCode ? row.response.statusCode : '...', {
+		columnHelper.accessor(row => row.response?.statusCode || '...', {
 			id: 'status',
 			header: 'STATUS',
 			cell: info => String(info.getValue()),
@@ -335,8 +374,8 @@ function HistoryPanel({ themeId }) {
 
 	React.useEffect(() => {
 		let cancelled = false;
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.history) {
+		const sentinel = globalThis?.window?.sentinel;
+		if (!sentinel?.history) {
 			setLoading(false);
 			return undefined;
 		}
@@ -359,18 +398,9 @@ function HistoryPanel({ themeId }) {
 
 				const pendingItems = bufferedItemsRef.current.splice(0);
 				if (pageRef.current === 0 && pendingItems.length > 0) {
-					setItems(prev => {
-						const mergedById = new Map();
-						[pendingItems, prev].forEach(collection => {
-							collection.forEach(item => {
-								if (!item || mergedById.has(item.id)) {
-									return;
-								}
-								mergedById.set(item.id, item);
-							});
-						});
-						return Array.from(mergedById.values()).slice(0, pageSizeRef.current);
-					});
+					const mergedItems = mergeBufferedItems(itemsRef.current, pendingItems, pageSizeRef.current);
+					itemsRef.current = mergedItems;
+					setItems(mergedItems);
 				}
 
 				if (refreshPendingRef.current && loadHistoryRef.current) {
@@ -386,7 +416,7 @@ function HistoryPanel({ themeId }) {
 			}
 
 			if (pageRef.current === 0 && matchesActiveFilters(item, activeFilterRef.current)) {
-				const isInBuffer = bufferedItemsRef.current.some(existing => existing && existing.id === item.id);
+				const isInBuffer = bufferedItemsRef.current.some(existing => existing?.id === item.id);
 				if (!isInBuffer && !knownIdsRef.current.has(item.id)) {
 					bufferedItemsRef.current.unshift(item);
 					knownIdsRef.current.add(item.id);
@@ -412,8 +442,8 @@ function HistoryPanel({ themeId }) {
 	}, []);
 
 	async function clearHistory() {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.history) {
+		const sentinel = globalThis?.window?.sentinel;
+		if (!sentinel?.history) {
 			return;
 		}
 		setErrorText('');
@@ -428,30 +458,9 @@ function HistoryPanel({ themeId }) {
 		}
 	}
 
-	async function sendToRepeater(itemId) {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.history || !sentinel.repeater) {
-			return;
-		}
-
-		setErrorText('');
-		setNoticeText('');
-		try {
-			const item = await sentinel.history.get({ id: itemId });
-			if (!item || !item.request) {
-				throw new Error('Selected history item has no request payload.');
-			}
-
-			await sentinel.repeater.send({ request: item.request });
-			setNoticeText('Sent to Repeater.');
-		} catch {
-			setErrorText('Unable to send item to Repeater.');
-		}
-	}
-
 	async function sendToIntruder(itemId) {
-		const sentinel = window.sentinel;
-		if (!sentinel || !sentinel.history || !sentinel.intruder) {
+		const sentinel = globalThis?.window?.sentinel;
+		if (!sentinel?.history || !sentinel?.intruder) {
 			return;
 		}
 
@@ -459,13 +468,13 @@ function HistoryPanel({ themeId }) {
 		setNoticeText('');
 		try {
 			const item = await sentinel.history.get({ id: itemId });
-			if (!item || !item.request) {
+			if (!item?.request) {
 				throw new Error('Selected history item has no request payload.');
 			}
 
 			const request = item.request;
 			const scheme = request.tls ? 'https' : 'http';
-			const authority = request.host || (request.headers && request.headers.host) || 'localhost';
+			const authority = request.host || request.headers?.host || 'localhost';
 			const originalUrl = request.url || `${scheme}://${authority}${request.path || '/'}`;
 			const separator = originalUrl.includes('?') ? '&' : '?';
 			const templateUrl = `${originalUrl}${separator}attack=§injection§`;
@@ -498,18 +507,34 @@ function HistoryPanel({ themeId }) {
 	}
 
 	function sendToRepeaterInspector(item) {
-		window.dispatchEvent(new CustomEvent('sentinel:repeater-handoff', {
+		const appWindow = globalThis?.window;
+		if (!appWindow) {
+			return;
+		}
+		appWindow.dispatchEvent(new CustomEvent('sentinel:repeater-handoff', {
 			detail: {
 				request: item.request,
 			},
 		}));
-		window.dispatchEvent(new CustomEvent('sentinel:navigate-module', {
+		appWindow.dispatchEvent(new CustomEvent('sentinel:navigate-module', {
 			detail: { moduleName: 'Repeater' },
 		}));
 		setNoticeText('Loaded selected request into Repeater tab.');
 	}
 
-	const selectedItem = items.find(item => item && item.id === selectedId) || null;
+	const selectedItem = items.find(item => item?.id === selectedId) || null;
+ 
+	const handleSendToRepeater = React.useCallback(() => {
+		if (selectedItem) {
+			sendToRepeaterInspector(selectedItem);
+		}
+	}, [selectedItem]);
+
+	const handleSendToIntruder = React.useCallback(() => {
+		if (selectedItem) {
+			sendToIntruder(selectedItem.id);
+		}
+	}, [selectedItem]);
 
 	const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -520,10 +545,10 @@ function HistoryPanel({ themeId }) {
 	return (
 		<Flex h='100%' overflow='hidden' direction='column'>
 			<Flex px='3' py='2' borderBottomWidth='1px' borderColor='border.default' bg='bg.elevated' align='center' justify='space-between' flexShrink='0'>
-				<Text fontWeight='medium' fontSize='sm'>History</Text>
+				<Text fontWeight='medium' fontSize='sm' color='fg.default'>History</Text>
 				<HStack gap='2'>
-					<Button size='xs' variant='outline' onClick={() => loadHistory(page)}>Refresh</Button>
-					<Button size='xs' variant='outline' colorPalette='red' onClick={clearHistory}>Clear</Button>
+					<Button size='xs' variant='outline' onClick={() => loadHistory(page)} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh</Button>
+					<Button size='xs' variant='outline' colorPalette='red' onClick={clearHistory} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Clear</Button>
 				</HStack>
 			</Flex>
 			<VStack align='stretch' spacing={3} p='4' flex='1' overflow='hidden'>
@@ -534,6 +559,10 @@ function HistoryPanel({ themeId }) {
 						placeholder='Host'
 						value={filters.host}
 						onChange={event => onFilterChange('host', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='180px'
 					/>
 					<Input
@@ -541,6 +570,10 @@ function HistoryPanel({ themeId }) {
 						placeholder='Path prefix'
 						value={filters.path}
 						onChange={event => onFilterChange('path', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='180px'
 					/>
 					<Input
@@ -548,6 +581,10 @@ function HistoryPanel({ themeId }) {
 						placeholder='Method (GET)'
 						value={filters.method}
 						onChange={event => onFilterChange('method', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='140px'
 					/>
 					<Input
@@ -556,15 +593,19 @@ function HistoryPanel({ themeId }) {
 						placeholder='Status (200)'
 						value={filters.statusCode}
 						onChange={event => onFilterChange('statusCode', event.target.value)}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_placeholder={{ color: 'fg.muted' }}
 						maxW='140px'
 					/>
-					<Button size='xs' variant='outline' onClick={() => loadHistory(0)}>Apply</Button>
+					<Button size='xs' variant='outline' onClick={() => loadHistory(0)} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Apply</Button>
 				</HStack>
 
 				<Text fontSize='sm' color='fg.muted'>
-					Page <Code>{page + 1}</Code> / <Code>{totalPages}</Code> · Showing <Code>{items.length}</Code> of <Code>{total}</Code>
+					Page <Code color='fg.default' bg='bg.subtle'>{page + 1}</Code> / <Code color='fg.default' bg='bg.subtle'>{totalPages}</Code> · Showing <Code color='fg.default' bg='bg.subtle'>{items.length}</Code> of <Code color='fg.default' bg='bg.subtle'>{total}</Code>
 				</Text>
-				<Text fontSize='xs' color='fg.muted'>Buffered stream flush cadence <Code>150ms</Code></Text>
+				<Text fontSize='xs' color='fg.muted'>Buffered stream flush cadence <Code color='fg.default' bg='bg.subtle'>150ms</Code></Text>
 
 				<Flex flex='1' minH='0' gap='3' overflow='hidden'>
 					<Box flex='1' minW='0' borderWidth='1px' borderRadius='sm' borderColor='border.default' overflow='hidden'>
@@ -579,8 +620,8 @@ function HistoryPanel({ themeId }) {
 							item={selectedItem}
 							inspectorTab={inspectorTab}
 							setInspectorTab={setInspectorTab}
-							onSendToRepeater={() => selectedItem ? sendToRepeaterInspector(selectedItem) : null}
-							onSendToIntruder={() => selectedItem ? sendToIntruder(selectedItem.id) : null}
+							onSendToRepeater={handleSendToRepeater}
+							onSendToIntruder={handleSendToIntruder}
 							themeId={themeId}
 						/>
 					</Box>
@@ -593,6 +634,10 @@ function HistoryPanel({ themeId }) {
 						variant='outline'
 						onClick={() => loadHistory(Math.max(0, page - 1))}
 						disabled={page <= 0}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle' }}
 					>
 						Previous
 					</Button>
@@ -601,6 +646,10 @@ function HistoryPanel({ themeId }) {
 						variant='outline'
 						onClick={() => loadHistory(page + 1)}
 						disabled={(page + 1) >= totalPages}
+						color='fg.default'
+						bg='bg.surface'
+						borderColor='border.default'
+						_hover={{ bg: 'bg.subtle' }}
 					>
 						Next
 					</Button>
@@ -612,5 +661,46 @@ function HistoryPanel({ themeId }) {
 		</Flex>
 	);
 }
+
+InspectorSection.propTypes = {
+	item: PropTypes.shape({
+		id: PropTypes.string,
+		request: PropTypes.shape({
+			method: PropTypes.string,
+			host: PropTypes.string,
+			path: PropTypes.string,
+			protocol: PropTypes.string,
+			body: PropTypes.string,
+			rawBodyBase64: PropTypes.string,
+			headers: PropTypes.objectOf(PropTypes.any),
+		}),
+		response: PropTypes.shape({
+			statusCode: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+			statusMessage: PropTypes.string,
+			contentType: PropTypes.string,
+			body: PropTypes.string,
+			rawBodyBase64: PropTypes.string,
+			headers: PropTypes.objectOf(PropTypes.any),
+		}),
+	}),
+	inspectorTab: PropTypes.string.isRequired,
+	setInspectorTab: PropTypes.func.isRequired,
+	onSendToRepeater: PropTypes.func.isRequired,
+	onSendToIntruder: PropTypes.func.isRequired,
+	themeId: PropTypes.string,
+};
+
+VirtualizedHistoryTable.propTypes = {
+	table: PropTypes.shape({
+		getRowModel: PropTypes.func.isRequired,
+		getFlatHeaders: PropTypes.func.isRequired,
+	}).isRequired,
+	selectedId: PropTypes.string.isRequired,
+	onSelect: PropTypes.func.isRequired,
+};
+
+HistoryPanel.propTypes = {
+	themeId: PropTypes.string,
+};
 
 export default HistoryPanel;

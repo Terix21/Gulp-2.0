@@ -48,6 +48,7 @@ import DecoderPanel from './sentinel/DecoderPanel';
 import EmbeddedBrowserPanel from './sentinel/EmbeddedBrowserPanel';
 import ExtensionsPanel from './sentinel/ExtensionsPanel';
 import { modules, moduleDescriptions } from './app-constants';
+import { getOverlayScrim } from './sentinel/theme-utils';
 
 const panelStatusFields = {
   Dashboard: [
@@ -457,15 +458,6 @@ function getFilterBadgePalette(lvl) {
   return 'blue';
 }
 
-function getFilterButtonBg(isActive, lvl) {
-  if (isActive) {
-    if (lvl === 'error') return '#991b1b';
-    if (lvl === 'warn') return '#92400e';
-    return 'brand.600';
-  }
-  return 'transparent';
-}
-
 function ConsoleDrawer(props) {
   const {
     isOpen,
@@ -479,8 +471,12 @@ function ConsoleDrawer(props) {
     onClear,
     onExport,
   } = props;
-  const levelColor = { info: theme.colors.fgDefault, warn: '#d97706', error: '#dc2626' };
-  const levelBg = { info: 'transparent', warn: 'rgba(217,119,6,0.08)', error: 'rgba(220,38,38,0.08)' };
+  const levelColor = { info: theme.colors.fgDefault, warn: 'orange.600', error: 'red.600' };
+  const levelBg = {
+    info: 'transparent',
+    warn: 'rgba(221, 107, 32, 0.10)',
+    error: 'rgba(229, 62, 62, 0.10)'
+  };
   const filteredLogs = filter === 'all' ? logs : logs.filter(e => e.level === filter);
   return (
     <Box
@@ -514,8 +510,13 @@ function ConsoleDrawer(props) {
                 const isActive = filter === lvl;
                 let countBadge = null;
                 if (lvl === 'info' || lvl === 'warn' || lvl === 'error') {
+                  const badgeColors = {
+                    info: { border: 'blue.500', bg: 'rgba(59,130,246,0.1)' },
+                    warn: { border: 'orange.500', bg: 'rgba(249,115,22,0.1)' },
+                    error: { border: 'red.500', bg: 'rgba(239,68,68,0.1)' }
+                  };
                   countBadge = (
-                    <Badge ml='1' colorPalette={getFilterBadgePalette(lvl)} size='xs'>
+                    <Badge ml='1' variant='outline' color='var(--sentinel-fg-default)' borderColor={badgeColors[lvl].border} bg={badgeColors[lvl].bg} size='xs'>
                       {logs.filter(e => e.level === lvl).length}
                     </Badge>
                   );
@@ -525,9 +526,7 @@ function ConsoleDrawer(props) {
                     key={lvl}
                     size='xs'
                     variant={isActive ? 'solid' : 'ghost'}
-                    color={isActive ? 'white' : theme.colors.fgMuted}
-                    bg={getFilterButtonBg(isActive, lvl)}
-                    _hover={{ bg: theme.colors.bgSubtle }}
+                    colorPalette={getFilterBadgePalette(lvl)}
                     onClick={() => onFilterChange(lvl)}
                   >
                     {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
@@ -1081,16 +1080,20 @@ function App() {
   const ActivePanel = modulePanels[activePane] || DashboardShell;
   const activeTheme = selectedTheme;
   const shellCodeProps = {
-    bg: 'bg.subtle',
-    color: 'fg.default',
+    as: 'code',
+    bg: 'var(--sentinel-bg-subtle)',
+    color: 'var(--sentinel-fg-default)',
     borderWidth: '1px',
-    borderColor: 'border.default',
+    borderColor: 'var(--sentinel-border-default)',
     borderRadius: 'sm',
     px: '1.5',
     py: '0.5',
     fontSize: 'xs',
     fontFamily: 'mono'
   };
+  const settingsOverlayScrim = getOverlayScrim(selectedThemeId);
+
+  const commandPaletteOverlayScrim = getOverlayScrim(selectedThemeId);
 
   return (
     <Flex h='100vh' overflow='hidden' bg='bg.canvas' color='fg.default' direction='row' fontFamily='body'>
@@ -1112,6 +1115,8 @@ function App() {
         <Button
           size='sm'
           variant='ghost'
+          color='fg.muted'
+          _hover={{ bg: 'bg.surface', color: 'fg.default' }}
           mx={sidebarExpanded ? '2' : '0'}
           minW='0'
           h='40px'
@@ -1133,7 +1138,10 @@ function App() {
             <Box key={moduleName} position='relative' mx={sidebarExpanded ? '2' : '0'}>
               <Button
                 size='sm'
-                variant={isActive ? 'solid' : 'ghost'}
+                variant='ghost'
+                color={isActive ? 'var(--sentinel-fg-default)' : 'var(--sentinel-fg-muted)'}
+                bg={isActive ? 'var(--sentinel-bg-subtle)' : 'transparent'}
+                _hover={{ bg: 'bg.surface' }}
                 w={sidebarExpanded ? '100%' : '44px'}
                 h='44px'
                 px={sidebarExpanded ? '3' : '0'}
@@ -1175,7 +1183,12 @@ function App() {
               <Text fontSize='sm' color='fg.muted' fontFamily='body'>Workbench shell for concurrent security workflows.</Text>
             </Box>
             <HStack gap='3' wrap='wrap' justify='flex-end'>
-              <Badge colorPalette={proxyRunning ? 'green' : 'orange'}>
+              <Badge 
+                variant='outline' 
+                color={proxyRunning ? 'var(--sentinel-fg-default)' : 'var(--sentinel-fg-muted)'} 
+                borderColor={proxyRunning ? 'green.500' : 'orange.500'} 
+                bg={proxyRunning ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)'}
+              >
                 Proxy {proxyRunning ? 'running' : 'paused'}
               </Badge>
               <Button size='xs' variant='outline' onClick={() => setSettingsOpen(true)}>
@@ -1204,6 +1217,10 @@ function App() {
                   <Button
                     size='sm'
                     variant={activePane === pane ? 'solid' : 'outline'}
+                    color={activePane === pane ? 'fg.default' : 'fg.muted'}
+                    bg={activePane === pane ? 'bg.subtle' : 'transparent'}
+                    borderColor={activePane === pane ? 'transparent' : 'border.default'}
+                    _hover={{ bg: 'bg.surface', color: 'fg.default' }}
                     onClick={() => setActivePane(pane)}
                   >
                     {pane}
@@ -1241,11 +1258,11 @@ function App() {
             >
               <VStack ref={contextRailContentRef} w='320px' minW='320px' align='stretch' gap='3' overflowY='auto' overflowX='hidden' p='3'>
                 <Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel'>
-                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading'>Active Context</Text>
-                  <Text fontSize='sm' mb='2' fontFamily='body'>Pane <Code {...shellCodeProps}>{activePane}</Code></Text>
+                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading' color='var(--sentinel-fg-default)'>Active Context</Text>
+                  <Text fontSize='sm' mb='2' fontFamily='body' color='var(--sentinel-fg-muted)'>Pane <Box {...shellCodeProps}>{activePane}</Box></Text>
                   {(panelStatusFields[activePane] || []).map((field) => (
-                    <Text key={field.key} fontSize='sm' fontFamily='body' color='fg.muted'>
-                      {field.label}: <Code {...shellCodeProps}>{String(panelStatus[activePane]?.[field.key] ?? '\u2014')}</Code>
+                    <Text key={field.key} fontSize='sm' fontFamily='body' color='var(--sentinel-fg-muted)'>
+                      {field.label}: <Box {...shellCodeProps}>{String(panelStatus[activePane]?.[field.key] ?? '\u2014')}</Box>
                     </Text>
                   ))}
                 </Box>
@@ -1261,6 +1278,9 @@ function App() {
                         size='sm'
                         justifyContent='flex-start'
                         variant='outline'
+                        color='fg.default'
+                        bg='bg.surface'
+                        _hover={{ bg: 'bg.subtle' }}
                         onClick={action.run}
                         onFocus={() => {
                           lastQuickActionIndexRef.current = index;
@@ -1329,7 +1349,7 @@ function App() {
         <Flex
           position='fixed'
           inset='0'
-          bg={activeTheme.mode === 'dark' ? 'rgba(5, 10, 16, 0.68)' : 'rgba(20, 28, 36, 0.20)'}
+          bg={settingsOverlayScrim}
           justify='flex-end'
           zIndex='1050'
           role='presentation'
@@ -1390,7 +1410,7 @@ function App() {
                           >
                             <Box textAlign='left'>
                               <Text fontSize='sm' fontWeight='semibold'>{theme.label}</Text>
-                              <Text fontSize='xs' color={selectedThemeId === themeId ? 'whiteAlpha.800' : 'fg.muted'}>
+                              <Text fontSize='xs' color={selectedThemeId === themeId ? 'fg.default' : 'fg.muted'}>
                                 {theme.description}
                               </Text>
                             </Box>
@@ -1428,6 +1448,10 @@ function App() {
                   placeholder={'X-Customer-ID: acme\nX-Environment: production'}
                   fontFamily='mono'
                   disabled={proxySettingsLoading || proxySettingsSaving}
+                  color='fg.default'
+                  bg='bg.surface'
+                  borderColor='border.default'
+                  _placeholder={{ color: 'fg.muted' }}
                 />
 
                 <HStack align='center' gap='2' wrap='wrap'>
@@ -1447,6 +1471,10 @@ function App() {
                     maxW='170px'
                     fontFamily='mono'
                     disabled={proxySettingsLoading || proxySettingsSaving}
+                    color='fg.default'
+                    bg='bg.surface'
+                    borderColor='border.default'
+                    _placeholder={{ color: 'fg.muted' }}
                   />
                   <Input
                     size='sm'
@@ -1456,6 +1484,10 @@ function App() {
                     maxW='170px'
                     fontFamily='mono'
                     disabled={proxySettingsLoading || proxySettingsSaving}
+                    color='fg.default'
+                    bg='bg.surface'
+                    borderColor='border.default'
+                    _placeholder={{ color: 'fg.muted' }}
                   />
                 </HStack>
 
@@ -1468,6 +1500,10 @@ function App() {
                   placeholder={'192.0.2.10\n192.0.2.11'}
                   fontFamily='mono'
                   disabled={proxySettingsLoading || proxySettingsSaving}
+                  color='fg.default'
+                  bg='bg.surface'
+                  borderColor='border.default'
+                  _placeholder={{ color: 'fg.muted' }}
                 />
               </VStack>
             </Box>
@@ -1476,7 +1512,16 @@ function App() {
       ) : null}
 
       {commandPaletteOpen ? (
-        <Flex position='fixed' inset='0' bg={activeTheme.mode === 'dark' ? 'rgba(5, 10, 16, 0.65)' : 'rgba(20, 28, 36, 0.18)'} align='flex-start' justify='center' pt='16' zIndex='1000' role='presentation'>
+        <Flex
+          position='fixed'
+          inset='0'
+          bg={commandPaletteOverlayScrim}
+          align='flex-start'
+          justify='center'
+          pt='16'
+          zIndex='1000'
+          role='presentation'
+        >
           <Box
             w='560px'
             maxW='calc(100vw - 32px)'
@@ -1496,6 +1541,10 @@ function App() {
               value={commandQuery}
               onChange={(event) => setCommandQuery(event.target.value)}
               mb='3'
+              color='fg.default'
+              bg='bg.surface'
+              borderColor='border.default'
+              _placeholder={{ color: 'fg.muted' }}
             />
             <Stack gap='2' maxH='320px' overflowY='auto'>
               {filteredCommands.map((moduleName) => (
@@ -1527,4 +1576,3 @@ function App() {
 }
 
 export default App;
-
