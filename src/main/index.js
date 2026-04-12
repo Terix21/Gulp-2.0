@@ -533,9 +533,12 @@ function createWindow () {
       sourceId,
     } = normalizeRendererConsoleMessageArgs(args);
     const severity = mapRendererConsoleSeverity(level);
+    const normalizedSeverity = severity === 'warn' || severity === 'error' || severity === 'info'
+      ? severity
+      : 'info';
 
     sendConsoleLog(
-      severity,
+      normalizedSeverity,
       'renderer',
       String(message || ''),
       `source=${sourceId || 'unknown'} line=${Number.isFinite(line) ? line : 'n/a'}`,
