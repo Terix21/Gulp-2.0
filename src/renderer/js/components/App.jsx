@@ -366,6 +366,14 @@ function applyThemeToDocument(themeId) {
   root.dataset.sentinelThemeId = themeId;
   root.style.colorScheme = theme.mode;
 
+  if (theme.mode === 'dark') {
+    root.classList.add('dark');
+    root.classList.remove('light');
+  } else {
+    root.classList.add('light');
+    root.classList.remove('dark');
+  }
+
   Object.entries(theme.colors).forEach(([token, value]) => {
     const cssName = token.replaceAll(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
     root.style.setProperty(`--sentinel-${cssName}`, value);

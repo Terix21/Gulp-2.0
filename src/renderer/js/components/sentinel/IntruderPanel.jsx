@@ -92,7 +92,7 @@ function estimateSourceCount(source) {
 
   if (source.type === 'dictionary') {
     if (source.filePath) {
-      return null;
+        return null;
     }
     return String(source.text || '')
       .split(/\r?\n/g)

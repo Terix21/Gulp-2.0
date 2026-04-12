@@ -129,7 +129,7 @@ function TargetMapPanel({ themeId }) {
     cidr: '',
     ip: '',
   });
-  const [csvFormat, setCsvFormat] = React.useState('hackerone');
+  const [csvFormat, setCsvFormat] = React.useState('');
   const [statusText, setStatusText] = React.useState('');
   const [errorText, setErrorText] = React.useState('');
   const [importBurpLoading, setImportBurpLoading] = React.useState(false);
@@ -259,6 +259,11 @@ function TargetMapPanel({ themeId }) {
     setImportResult(null);
     setImportCsvLoading(true);
     try {
+      if (!csvFormat) {
+        setImportResult({ kind: 'error', message: 'Select a CSV format before importing.', warnings: [] });
+        return;
+      }
+
       const sentinel = globalThis?.window?.sentinel;
       if (!sentinel?.scope) {
         setImportResult({ kind: 'error', message: 'Scope API unavailable.', warnings: [] });
@@ -350,36 +355,40 @@ function TargetMapPanel({ themeId }) {
             </HStack>
             <HStack>
               <Text fontSize='sm' color='fg.muted' flex='1'>Choose a CSV file in the system file picker.</Text>
-              <Button
-                size='sm'
-                variant={csvFormat === 'hackerone' ? 'solid' : 'outline'}
-                onClick={() => setCsvFormat('hackerone')}
-                disabled={importBurpLoading || importCsvLoading}
-              color={csvFormat === 'hackerone' ? 'fg.default' : 'fg.muted'}
-              bg={csvFormat === 'hackerone' ? 'bg.subtle' : 'bg.surface'}
-              borderColor='border.default'
-              _hover={{ bg: 'bg.subtle', color: 'fg.default' }}
-              >
-                HackerOne
-              </Button>
-              <Button
-                size='sm'
-                variant={csvFormat === 'generic' ? 'solid' : 'outline'}
-                onClick={() => setCsvFormat('generic')}
-                disabled={importBurpLoading || importCsvLoading}
-              color={csvFormat === 'generic' ? 'fg.default' : 'fg.muted'}
-              bg={csvFormat === 'generic' ? 'bg.subtle' : 'bg.surface'}
-              borderColor='border.default'
-              _hover={{ bg: 'bg.subtle', color: 'fg.default' }}
-              >
-                Generic
-              </Button>
+              <HStack spacing={4}>
+                <label>
+                  <HStack spacing={2}>
+                    <input
+                      type='radio'
+                      name='csv-format'
+                      value='hackerone'
+                      checked={csvFormat === 'hackerone'}
+                      onChange={() => setCsvFormat('hackerone')}
+                      disabled={importBurpLoading || importCsvLoading}
+                    />
+                    <Text fontSize='sm' color='fg.default'>HackerOne</Text>
+                  </HStack>
+                </label>
+                <label>
+                  <HStack spacing={2}>
+                    <input
+                      type='radio'
+                      name='csv-format'
+                      value='generic'
+                      checked={csvFormat === 'generic'}
+                      onChange={() => setCsvFormat('generic')}
+                      disabled={importBurpLoading || importCsvLoading}
+                    />
+                    <Text fontSize='sm' color='fg.default'>Generic</Text>
+                  </HStack>
+                </label>
+              </HStack>
               <Button
                 size='sm'
                 variant='outline'
                 onClick={importCsv}
                 loading={importCsvLoading}
-                disabled={importBurpLoading || importCsvLoading}
+                disabled={importBurpLoading || importCsvLoading || !csvFormat}
               color='fg.default'
               bg='bg.surface'
               borderColor='border.default'
