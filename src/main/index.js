@@ -18,7 +18,7 @@ const decoderService = require('./proxy/decoder-service');
 const extensionHost = require('./proxy/extension-host');
 const { registerProxyHandlers } = require('./proxy/proxy-ipc');
 const { registerBrowserHandlers } = require('./proxy/browser-ipc');
-const { mapRendererConsoleSeverity } = require('./renderer-console');
+const { mapRendererConsoleSeverity, normalizeRendererConsoleMessageArgs } = require('./renderer-console');
 
 function configureElectronStoragePaths() {
   try {
@@ -480,29 +480,6 @@ function registerCaHandlers() {
     const guidance = caManager.getTrustInstallGuidance();
     return { guidance };
   });
-}
-
-function normalizeRendererConsoleMessageArgs(args = []) {
-  const [eventOrPayload, level, message, line, sourceId] = args;
-  const usingLegacySignature = args.length > 1;
-  if (usingLegacySignature) {
-    return {
-      level,
-      message,
-      line,
-      sourceId,
-    };
-  }
-
-  const payload = eventOrPayload && typeof eventOrPayload === 'object'
-    ? eventOrPayload
-    : {};
-  return {
-    level: payload.level,
-    message: payload.message,
-    line: Number.isFinite(payload.lineNumber) ? payload.lineNumber : payload.line,
-    sourceId: payload.sourceId,
-  };
 }
 
 function createWindow () {
