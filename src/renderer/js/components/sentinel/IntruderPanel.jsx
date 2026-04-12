@@ -9,7 +9,6 @@ import {
   HStack,
   Input,
   Text,
-  Select,
   Textarea,
   VStack,
 } from '@chakra-ui/react';
@@ -217,14 +216,37 @@ function updateAttacksWithProgress(previousAttacks, payload, context) {
 }
 
 function appendLastResultIfMissing(previousResults, lastResult) {
-  if (!lastResult) {
+  const normalized = normalizeIntruderResult(lastResult);
+  if (!normalized) {
     return previousResults;
   }
-  const exists = previousResults.some(item => item.id === lastResult.id);
+  const exists = previousResults.some(item => item.id === normalized.id);
   if (exists) {
     return previousResults;
   }
-  return [...previousResults, lastResult];
+  return [...previousResults, normalized];
+}
+
+function normalizeIntruderResult(result) {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+
+  const anomalyReasons = Array.isArray(result.anomalyReasons)
+    ? result.anomalyReasons.map(reason => String(reason || '')).filter(Boolean)
+    : [];
+
+  const id = result.id ? String(result.id) : `result-${result.attackId || 'unknown'}-${result.position || 0}-${result.payload || ''}`;
+  return {
+    ...result,
+    id,
+    payload: result.payload == null ? '' : String(result.payload),
+    statusCode: Number.isFinite(Number(result.statusCode)) ? Number(result.statusCode) : 0,
+    length: Number.isFinite(Number(result.length)) ? Number(result.length) : 0,
+    duration: Number.isFinite(Number(result.duration)) ? Number(result.duration) : 0,
+    isAnomalous: Boolean(result.isAnomalous),
+    anomalyReasons,
+  };
 }
 
 function getProgressBadgeStyle(status) {
@@ -315,7 +337,9 @@ function IntruderPanel({ themeId }) {
     try {
       const result = await sentinel.intruder.results({ attackId, page: 0, pageSize: 500 });
       setResults(prev => {
-        const fetched = Array.isArray(result.results) ? result.results : [];
+        const fetched = Array.isArray(result.results)
+          ? result.results.map(item => normalizeIntruderResult(item)).filter(Boolean)
+          : [];
         if (fetched.length === 0) {
           return prev;
         }
@@ -350,6 +374,10 @@ function IntruderPanel({ themeId }) {
       method,
       url,
     };
+
+    if (typeof sentinel.intruder.onProgress !== 'function') {
+      return undefined;
+    }
 
     const unsubscribe = sentinel.intruder.onProgress((payload) => {
       if (!payload?.attackId) {
@@ -517,18 +545,23 @@ function IntruderPanel({ themeId }) {
 
               <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
                 <Text fontWeight='semibold' fontSize='sm' mb={2}>Attack Profile</Text>
-                <Select
-                  size='xs'
+                <Box
+                  as='select'
+                  aria-label='Attack profile'
                   value={attackType}
                   onChange={event => setAttackType(event.target.value)}
                   color='fg.default'
                   bg='bg.surface'
                   borderColor='border.default'
+                  borderWidth='1px'
+                  borderRadius='sm'
+                  px='2'
+                  h='1.75rem'
                 >
                   <option value='sniper'>Single-point / Sniper</option>
                   <option value='pitchfork'>Pitchfork</option>
                   <option value='cluster-bomb'>Cluster Bomb</option>
-                </Select>
+                </Box>
               </Box>
 
               <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
@@ -540,19 +573,24 @@ function IntruderPanel({ themeId }) {
                     return (
                       <Box key={entry.marker.id} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2}>
                       <Text fontSize='xs' fontWeight='semibold' mb={2}>{entry.marker.label} · default <Code color='fg.default' bg='bg.subtle'>{entry.marker.defaultValue}</Code></Text>
-                        <Select
-                          size='xs'
+                        <Box
+                          as='select'
+                          aria-label={`Payload source type for ${entry.marker.label}`}
                           value={source.type}
                           onChange={event => updatePositionSource(index, { type: event.target.value })}
                           mb={2}
                           color='fg.default'
                           bg='bg.surface'
                           borderColor='border.default'
+                          borderWidth='1px'
+                          borderRadius='sm'
+                          px='2'
+                          h='1.75rem'
                         >
                           <option value='dictionary'>Dictionary</option>
                           <option value='bruteforce'>Brute-force charset</option>
                           <option value='sequential'>Sequential numeric</option>
-                        </Select>
+                        </Box>
 
                         {source.type === 'dictionary' ? (
                           <VStack align='stretch' spacing={2}>
@@ -609,15 +647,15 @@ function IntruderPanel({ themeId }) {
                   <Input size='xs' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Input size='xs' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Button size='xs' variant={filters.anomaliesOnly ? 'solid' : 'outline'} onClick={() => setFilters(prev => ({ ...prev, anomaliesOnly: !prev.anomaliesOnly }))}>Anomalies Only</Button>
-                  <Select size='xs' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default'>
+                  <Box as='select' aria-label='Sort intruder results by' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='duration'>Sort by Duration</option>
                     <option value='statusCode'>Sort by Status</option>
                     <option value='length'>Sort by Length</option>
-                  </Select>
-                  <Select size='xs' value={sortDirection} onChange={event => setSortDirection(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default'>
+                  </Box>
+                  <Box as='select' aria-label='Intruder results sort direction' value={sortDirection} onChange={event => setSortDirection(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='desc'>Desc</option>
                     <option value='asc'>Asc</option>
-                  </Select>
+                  </Box>
                 </HStack>
 
                 {loadingResults ? <Text fontSize='xs' color='fg.muted'>Loading results...</Text> : null}

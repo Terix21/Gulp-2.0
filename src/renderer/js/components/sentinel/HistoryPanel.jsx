@@ -548,7 +548,7 @@ function HistoryPanel({ themeId }) {
 				<Text fontWeight='medium' fontSize='sm' color='fg.default'>History</Text>
 				<HStack gap='2'>
 					<Button size='xs' variant='outline' onClick={() => loadHistory(page)} color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }}>Refresh</Button>
-					<Button size='xs' variant='outline' colorPalette='red' onClick={clearHistory} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Clear</Button>
+					<Button size='xs' variant='outline' color='fg.default' borderColor='border.default' onClick={clearHistory} bg='bg.surface' _hover={{ bg: 'bg.subtle' }}>Clear</Button>
 				</HStack>
 			</Flex>
 			<VStack align='stretch' spacing={3} p='4' flex='1' overflow='hidden'>

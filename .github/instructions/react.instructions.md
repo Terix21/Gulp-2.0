@@ -90,3 +90,5 @@ react
 - Remove unused state setters and dead helpers immediately (`setPageSize`-style leftovers) to keep components warning-free.
 - Keep component-internal nesting shallow; extract deeply nested callbacks/helpers to top-level utility functions when depth exceeds 4 levels.
 - Keep pure helper functions (for example filter builders and match predicates) at module scope unless they rely on component-local closure state.
+- 2026-04-12: When using native controls in JSX (`<select>`, `Box as='select'`, etc.), provide explicit accessible naming via `aria-label`, `aria-labelledby`, or `id`/`htmlFor` pairing; do not rely on nearby text only.
+- 2026-04-12: Prefer shared select styling via the Chakra theme recipe (or a shared wrapper) instead of repeating `bg/color/border/px/h` props on each select instance.

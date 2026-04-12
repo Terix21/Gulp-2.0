@@ -42,23 +42,106 @@ const config = defineConfig({
     },
     semanticTokens: {
       colors: {
-        'bg.canvas': { value: 'var(--sentinel-bg-canvas, #0e141c)' },
-        'bg.panel': { value: 'var(--sentinel-bg-panel, #111821)' },
-        'bg.surface': { value: 'var(--sentinel-bg-surface, #1a2531)' },
-        'bg.subtle': { value: 'var(--sentinel-bg-subtle, #202d3a)' },
-        'bg.elevated': { value: 'var(--sentinel-bg-elevated, #0b1118)' },
-        'fg.default': { value: 'var(--sentinel-fg-default, #f0f4f8)' },
-        'fg.muted': { value: 'var(--sentinel-fg-muted, #cad7e2)' },
-        'border.default': { value: 'var(--sentinel-border-default, #2a3948)' },
-        'border.subtle': { value: 'var(--sentinel-border-subtle, #34485b)' },
-        'severity.critical': { value: '#e53e3e' },
-        'severity.high': { value: '#ed8936' },
-        'severity.medium': { value: '#ecc94b' },
-        'severity.low': { value: '#63b3ed' },
-        'severity.info': { value: '#b4c4d2' }
+        bg: {
+          canvas: { value: 'var(--sentinel-bg-canvas, #0e141c)' },
+          panel: { value: 'var(--sentinel-bg-panel, #111821)' },
+          surface: { value: 'var(--sentinel-bg-surface, #1a2531)' },
+          subtle: { value: 'var(--sentinel-bg-subtle, #202d3a)' },
+          elevated: { value: 'var(--sentinel-bg-elevated, #0b1118)' }
+        },
+        fg: {
+          default: { value: 'var(--sentinel-fg-default, #f0f4f8)' },
+          muted: { value: 'var(--sentinel-fg-muted, #cad7e2)' }
+        },
+        border: {
+          default: { value: 'var(--sentinel-border-default, #2a3948)' },
+          subtle: { value: 'var(--sentinel-border-subtle, #34485b)' }
+        },
+        severity: {
+          critical: { value: '#e53e3e' },
+          high: { value: '#ed8936' },
+          medium: { value: '#ecc94b' },
+          low: { value: '#63b3ed' },
+          info: { value: '#b4c4d2' }
+        }
       }
     },
     recipes: {
+      code: {
+        base: {
+          bg: 'bg.surface',
+          color: 'fg.default',
+          borderWidth: '1px',
+          borderColor: 'border.default'
+        }
+      },
+      input: {
+        base: {
+          bg: 'bg.surface',
+          color: 'fg.default',
+          borderColor: 'border.default',
+          _focus: {
+            borderColor: 'brand.500',
+            outline: 'none'
+          }
+        },
+        variants: {
+          variant: {
+            outline: {
+              bg: 'bg.surface'
+            }
+          }
+        },
+        defaultVariants: {
+          variant: 'outline'
+        }
+      },
+      textarea: {
+        base: {
+          bg: 'bg.surface',
+          color: 'fg.default',
+          borderColor: 'border.default',
+          _focus: {
+            borderColor: 'brand.500',
+            outline: 'none'
+          }
+        },
+        variants: {
+          variant: {
+            outline: {
+              bg: 'bg.surface'
+            }
+          }
+        },
+        defaultVariants: {
+          variant: 'outline'
+        }
+      },
+      select: {
+        base: {
+          bg: 'bg.surface',
+          color: 'fg.default',
+          borderColor: 'border.default',
+          borderWidth: '1px',
+          borderRadius: 'sm',
+          px: '2',
+          h: '1.75rem',
+          _focus: {
+            borderColor: 'brand.500',
+            outline: 'none'
+          }
+        },
+        variants: {
+          variant: {
+            outline: {
+              bg: 'bg.surface'
+            }
+          }
+        },
+        defaultVariants: {
+          variant: 'outline'
+        }
+      },
       button: {
         base: {
           borderRadius: 'sm',

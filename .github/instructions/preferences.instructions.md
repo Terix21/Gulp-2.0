@@ -42,3 +42,6 @@ Repository-level coding and review preferences.
 - 2026-04-11: Do not leave unused state setters, locals, or helper functions (`setX` values from `useState`, dead callbacks, orphaned utility functions). Remove them in the same change where they become unused.
 - 2026-04-11: Extract nested ternary expressions into independent statements/variables before render or before use in logic; avoid chained ternaries in JSX props and status/style selection.
 - 2026-04-11: Keep helper functions that do not need closure state at module scope (outside React component bodies) to reduce cognitive complexity and nested-function depth.
+- 2026-04-12: In renderer tests, use `globalThis` instead of `global`/`window` when setting globals and API shims, compare directly with `undefined` (avoid `typeof x === 'undefined'`), and avoid empty stub methods (return `undefined` explicitly in no-op mocks).
+- 2026-04-12: Every renderer form control must have a programmatic accessible name. For native controls rendered with `as='select'`, always include `aria-label`, `aria-labelledby`, or `id` + `<label htmlFor>`; visual text alone is insufficient.
+- 2026-04-12: Keep select styling centralized. Add/update shared select style definitions in `src/renderer/js/theme.js` (or a single shared wrapper) rather than duplicating long per-instance style prop sets across panels.

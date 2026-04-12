@@ -17,7 +17,6 @@ import {
 	Flex,
 	HStack,
 	Input,
-	Select,
 	Text,
 	Textarea,
 	VStack,
@@ -268,35 +267,45 @@ function CompareView(props) {
 			<HStack mb={3} align='flex-start' wrap='wrap'>
 				<Box flex='1' minW='200px'>
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send A</Text>
-					<Select
-						size='xs'
+					<Box
+						as='select'
+						aria-label='Send A'
 						value={idA}
 						onChange={e => setIdA(e.target.value)}
 						color='fg.default'
 						bg='bg.surface'
 						borderColor='border.default'
+						borderWidth='1px'
+						borderRadius='sm'
+						px='2'
+						h='1.75rem'
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
 							<option key={s.id} value={s.id}>{labelForSend(s)}</option>
 						))}
-					</Select>
+					</Box>
 				</Box>
 				<Box flex='1' minW='200px'>
 					<Text fontSize='xs' color='fg.muted' mb={1}>Send B</Text>
-					<Select
-						size='xs'
+					<Box
+						as='select'
+						aria-label='Send B'
 						value={idB}
 						onChange={e => setIdB(e.target.value)}
 						color='fg.default'
 						bg='bg.surface'
 						borderColor='border.default'
+						borderWidth='1px'
+						borderRadius='sm'
+						px='2'
+						h='1.75rem'
 					>
 						<option value=''>— pick a send —</option>
 						{sends.map(s => (
 							<option key={s.id} value={s.id}>{labelForSend(s)}</option>
 						))}
-					</Select>
+					</Box>
 				</Box>
 			</HStack>
 			{(idA || idB) && (
