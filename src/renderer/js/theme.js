@@ -117,6 +117,31 @@ const config = defineConfig({
           variant: 'outline'
         }
       },
+      select: {
+        base: {
+          bg: 'bg.surface',
+          color: 'fg.default',
+          borderColor: 'border.default',
+          borderWidth: '1px',
+          borderRadius: 'sm',
+          px: '2',
+          h: '1.75rem',
+          _focus: {
+            borderColor: 'brand.500',
+            outline: 'none'
+          }
+        },
+        variants: {
+          variant: {
+            outline: {
+              bg: 'bg.surface'
+            }
+          }
+        },
+        defaultVariants: {
+          variant: 'outline'
+        }
+      },
       button: {
         base: {
           borderRadius: 'sm',

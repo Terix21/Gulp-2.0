@@ -547,6 +547,7 @@ function IntruderPanel({ themeId }) {
                 <Text fontWeight='semibold' fontSize='sm' mb={2}>Attack Profile</Text>
                 <Box
                   as='select'
+                  aria-label='Attack profile'
                   value={attackType}
                   onChange={event => setAttackType(event.target.value)}
                   color='fg.default'
@@ -574,6 +575,7 @@ function IntruderPanel({ themeId }) {
                       <Text fontSize='xs' fontWeight='semibold' mb={2}>{entry.marker.label} · default <Code color='fg.default' bg='bg.subtle'>{entry.marker.defaultValue}</Code></Text>
                         <Box
                           as='select'
+                          aria-label={`Payload source type for ${entry.marker.label}`}
                           value={source.type}
                           onChange={event => updatePositionSource(index, { type: event.target.value })}
                           mb={2}
@@ -645,12 +647,12 @@ function IntruderPanel({ themeId }) {
                   <Input size='xs' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Input size='xs' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Button size='xs' variant={filters.anomaliesOnly ? 'solid' : 'outline'} onClick={() => setFilters(prev => ({ ...prev, anomaliesOnly: !prev.anomaliesOnly }))}>Anomalies Only</Button>
-                  <Box as='select' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
+                  <Box as='select' aria-label='Sort intruder results by' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='duration'>Sort by Duration</option>
                     <option value='statusCode'>Sort by Status</option>
                     <option value='length'>Sort by Length</option>
                   </Box>
-                  <Box as='select' value={sortDirection} onChange={event => setSortDirection(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
+                  <Box as='select' aria-label='Intruder results sort direction' value={sortDirection} onChange={event => setSortDirection(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='desc'>Desc</option>
                     <option value='asc'>Asc</option>
                   </Box>
