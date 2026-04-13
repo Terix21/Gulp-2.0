@@ -10,6 +10,9 @@ SEN-023 Sequencer entropy analysis
 const { randomUUID } = require('node:crypto');
 const { forwardRequest: defaultForwardRequest } = require('./protocol-support');
 
+// Maximum accepted length for a user-supplied token key to bound regex/parse complexity.
+const MAX_TOKEN_KEY_LEN = 256;
+
 function clone(value) {
 	return structuredClone(value);
 }
@@ -95,6 +98,44 @@ function runsTest(values = []) {
 	};
 }
 
+// Determines whether a character is a valid token-value character.
+// Matches the same set as the former regex capture group: [A-Za-z0-9._+/=-].
+function isValueChar(ch) {
+	return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+		(ch >= '0' && ch <= '9') || ch === '.' || ch === '_' ||
+		ch === '+' || ch === '/' || ch === '=' || ch === '-';
+}
+
+// Deterministic linear scan for "key = value" or "key : value" patterns in body text.
+// Avoids constructing a RegExp from user-supplied key to prevent regex injection and ReDoS.
+function extractBodyToken(body, key) {
+	const lowerBody = body.toLowerCase();
+	const lowerKey = key.toLowerCase();
+	let pos = 0;
+
+	while (pos < body.length) {
+		const idx = lowerBody.indexOf(lowerKey, pos);
+		if (idx === -1) return '';
+
+		let i = idx + lowerKey.length;
+		while (i < body.length && body[i] === ' ') i++;           // skip whitespace
+		if (i >= body.length || (body[i] !== ':' && body[i] !== '=')) {
+			pos = idx + 1;                                         // not a separator — keep scanning
+			continue;
+		}
+		i++;                                                       // skip separator
+		while (i < body.length && body[i] === ' ') i++;           // skip whitespace after separator
+		// Skip optional opening quote; closing quote naturally terminates extraction
+		// because quote chars are not valid value chars per isValueChar().
+		if (i < body.length && (body[i] === '"' || body[i] === "'")) i++;
+		const start = i;
+		while (i < body.length && isValueChar(body[i])) i++;
+		if (i > start) return body.slice(start, i);
+		pos = idx + 1;
+	}
+	return '';
+}
+
 function normalizeHeaders(headers = {}) {
 	const out = {};
 	for (const [name, value] of Object.entries(headers || {})) {
@@ -125,7 +166,7 @@ function parseCookies(setCookieHeader) {
 
 function extractToken(response, tokenField = {}) {
 	const source = String(tokenField.source || 'cookie').toLowerCase();
-	const key = toText(tokenField.key || '').trim();
+	const key = toText(tokenField.key || '').trim().slice(0, MAX_TOKEN_KEY_LEN);
 
 	if (source === 'header') {
 		const headers = normalizeHeaders(response?.headers || {});
@@ -143,10 +184,7 @@ function extractToken(response, tokenField = {}) {
 		if (!key) {
 			return body;
 		}
-		const pattern = String.raw`${key}\s*[:=]\s*['"]?([A-Za-z0-9._+/=-]+)`;
-		const regex = new RegExp(pattern, 'i');
-		const match = regex.exec(body);
-		return match ? toText(match[1]) : '';
+		return extractBodyToken(body, key);
 	}
 
 	const cookies = parseCookies(response?.headers?.['set-cookie'] || '');
