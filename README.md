@@ -1,5 +1,9 @@
 # Gulp 2.0 (Electron + React + Chakra UI + Vite)
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Terix21_Gulp-2.0&metric=alert_status&token=609297a808c6d402884d2a91d29d3bdc677e4faf)](https://sonarcloud.io/summary/new_code?id=Terix21_Gulp-2.0)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Terix21_Gulp-2.0&metric=coverage&token=609297a808c6d402884d2a91d29d3bdc677e4faf)](https://sonarcloud.io/summary/new_code?id=Terix21_Gulp-2.0)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=Terix21_Gulp-2.0&metric=bugs&token=609297a808c6d402884d2a91d29d3bdc677e4faf)](https://sonarcloud.io/summary/new_code?id=Terix21_Gulp-2.0)
+
 Sentinel is a desktop web-security workbench built with Electron in the main process and React + Chakra UI in the renderer. The build pipeline is Vite-based.
 
 ## Current Status
