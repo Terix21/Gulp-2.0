@@ -214,7 +214,7 @@ describe('SEN-14 proxy core', () => {
 
     expect(interceptEngine.getQueue()).toHaveLength(2);
 
-    await interceptEngine.resume();
+    interceptEngine.resume();
     await first;
     await second;
 
@@ -639,7 +639,7 @@ describe('SEN-14 proxy core', () => {
     const originalRequest = http.request;
     let capturedLocalAddress = '';
     http.request = function wrappedRequest(options, callback) {
-      capturedLocalAddress = options && options.localAddress ? String(options.localAddress) : '';
+      capturedLocalAddress = options?.localAddress ? String(options.localAddress) : '';
       return originalRequest.call(http, options, callback);
     };
 

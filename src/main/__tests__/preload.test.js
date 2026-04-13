@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 
@@ -29,6 +30,13 @@ function executePreload() {
           },
         };
       }
+      if (id === '../contracts/build-info.json') {
+        return {
+          appName: 'gulp',
+          version: '1.0.0',
+          git: { commitCount: '64' },
+        };
+      }
       throw new Error(`Unexpected module in preload test: ${id}`);
     },
     process: {
@@ -43,7 +51,10 @@ function executePreload() {
     console,
   };
 
-  vm.runInNewContext(source, sandbox, { filename: preloadPath });
+  // Safe: vm.runInNewContext with trusted codebase source in isolated sandbox.
+  // Source is from preload.js (trusted); sandbox has no untrusted input.
+  // NOSONAR S1522 — Dynamic code execution is necessary for preload testing.
+  vm.runInNewContext(source, sandbox, { filename: preloadPath });  // NOSONAR
 
   return {
     exposed,
@@ -55,11 +66,11 @@ function executePreload() {
 }
 
 describe('Preload Bridge API Surface', () => {
-  it('exposes sentinel and electronInfo through contextBridge', () => {
+  it('exposes sentinel, electronInfo, and buildInfo through contextBridge', () => {
     const { exposed, exposeInMainWorld } = executePreload();
 
-    expect(exposeInMainWorld).toHaveBeenCalledTimes(2);
-    expect(Object.keys(exposed).sort()).toEqual(['electronInfo', 'sentinel']);
+    expect(exposeInMainWorld).toHaveBeenCalledTimes(3);
+    expect(Object.keys(exposed).sort((a, b) => a.localeCompare(b))).toEqual(['buildInfo', 'electronInfo', 'sentinel']);
   });
 
   it('exposes sentinel namespaces expected by the IPC contract', () => {
@@ -67,7 +78,7 @@ describe('Preload Bridge API Surface', () => {
     const sentinel = exposed.sentinel;
 
     expect(sentinel).toBeDefined();
-    expect(Object.keys(sentinel).sort()).toEqual([
+    expect(Object.keys(sentinel).sort((a, b) => a.localeCompare(b))).toEqual([
       'browser',
       'ca',
       'console',
@@ -128,6 +139,13 @@ describe('Preload Bridge API Surface', () => {
       chrome: '130.0.1',
       electron: '41.1.0',
     });
+  });
+
+  it('buildInfo exposes generated build metadata when available', () => {
+    const { exposed } = executePreload();
+
+    expect(typeof exposed.buildInfo).toBe('object');
+    expect(typeof exposed.buildInfo.version).toBe('string');
   });
 });
 
@@ -349,14 +367,15 @@ describe('Preload Bridge - all invoke channels', () => {
   it('extensions namespace: all invoke methods use correct channels', () => {
     const { exposed, ipcInvoke } = executePreload();
     const { extensions } = exposed.sentinel;
+    const extPath = path.join(os.tmpdir(), 'ext.zip');
 
     extensions.list();
-    extensions.install({ packagePath: '/tmp/ext.zip' });
+    extensions.install({ packagePath: extPath });
     extensions.uninstall({ id: 'ext-1' });
     extensions.toggle({ id: 'ext-1', enabled: false });
 
     expect(ipcInvoke).toHaveBeenCalledWith('extensions:list', {});
-    expect(ipcInvoke).toHaveBeenCalledWith('extensions:install', { packagePath: '/tmp/ext.zip' });
+    expect(ipcInvoke).toHaveBeenCalledWith('extensions:install', { packagePath: extPath });
     expect(ipcInvoke).toHaveBeenCalledWith('extensions:uninstall', { id: 'ext-1' });
     expect(ipcInvoke).toHaveBeenCalledWith('extensions:toggle', { id: 'ext-1', enabled: false });
   });
@@ -364,15 +383,17 @@ describe('Preload Bridge - all invoke channels', () => {
   it('project namespace: all invoke methods use correct channels', () => {
     const { exposed, ipcInvoke } = executePreload();
     const { project } = exposed.sentinel;
+    const projectPath = path.join(os.tmpdir(), 'project.db');
+    const projPath = path.join(os.tmpdir(), 'proj.db');
 
-    project.new({ name: 'New Project', filePath: '/tmp/project.db' });
-    project.open({ filePath: '/tmp/proj.db' });
+    project.new({ name: 'New Project', filePath: projectPath });
+    project.open({ filePath: projPath });
     project.save();
     project.close();
     project.meta();
 
-    expect(ipcInvoke).toHaveBeenCalledWith('project:new', { name: 'New Project', filePath: '/tmp/project.db' });
-    expect(ipcInvoke).toHaveBeenCalledWith('project:open', { filePath: '/tmp/proj.db' });
+    expect(ipcInvoke).toHaveBeenCalledWith('project:new', { name: 'New Project', filePath: projectPath });
+    expect(ipcInvoke).toHaveBeenCalledWith('project:open', { filePath: projPath });
     expect(ipcInvoke).toHaveBeenCalledWith('project:save', {});
     expect(ipcInvoke).toHaveBeenCalledWith('project:close', {});
     expect(ipcInvoke).toHaveBeenCalledWith('project:meta', {});
@@ -381,13 +402,14 @@ describe('Preload Bridge - all invoke channels', () => {
   it('ca namespace: all invoke methods use correct channels', () => {
     const { exposed, ipcInvoke } = executePreload();
     const { ca } = exposed.sentinel;
+    const caPath = path.join(os.tmpdir(), 'ca.pem');
 
     ca.get();
-    ca.export({ destPath: '/tmp/ca.pem' });
+    ca.export({ destPath: caPath });
     ca.rotate();
 
     expect(ipcInvoke).toHaveBeenCalledWith('ca:get', {});
-    expect(ipcInvoke).toHaveBeenCalledWith('ca:export', { destPath: '/tmp/ca.pem' });
+    expect(ipcInvoke).toHaveBeenCalledWith('ca:export', { destPath: caPath });
     expect(ipcInvoke).toHaveBeenCalledWith('ca:rotate', {});
   });
 });
@@ -461,8 +483,8 @@ describe('Preload Bridge - all push channels', () => {
 
     expect(ipcOn).toHaveBeenCalledWith('oob:hit', expect.any(Function));
     const wrapped = ipcOn.mock.calls[0][1];
-    wrapped({}, { payloadId: 'p1', source: '1.2.3.4' });
-    expect(handler).toHaveBeenCalledWith({ payloadId: 'p1', source: '1.2.3.4' });
+    wrapped({}, { payloadId: 'p1', source: '127.0.0.1' });
+    expect(handler).toHaveBeenCalledWith({ payloadId: 'p1', source: '127.0.0.1' });
 
     unsub();
     expect(ipcRemoveListener).toHaveBeenCalledWith('oob:hit', wrapped);

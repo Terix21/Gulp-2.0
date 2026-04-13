@@ -139,6 +139,83 @@ describe('SEN-024 extension host', () => {
     expect(listed.auditLog.some(entry => entry.action === 'script.exec')).toBe(true);
   });
 
+  it('rejects package install outside trusted roots when configured', () => {
+    host.configure({ trustedPackageRoots: [path.join(tempRoot, 'trusted')] });
+
+    const packageDir = path.join(tempRoot, 'outside-root-ext');
+    writeExtensionPackage(
+      packageDir,
+      {
+        id: 'demo.untrusted',
+        name: 'Untrusted Extension',
+        version: '1.0.0',
+        main: 'index.js',
+        permissions: ['audit.write'],
+      },
+      'module.exports.activate = function() {};' 
+    );
+
+    const installed = host.install({
+      packagePath: packageDir,
+      approvedPermissions: ['audit.write'],
+    });
+
+    expect(installed.ok).toBe(false);
+    expect(String(installed.error || '')).toContain('trusted package roots');
+  });
+
+  it('rejects package install when symlink inside trusted root points outside', () => {
+    const trustedDir = path.join(tempRoot, 'trusted');
+    const outsideDir = path.join(tempRoot, 'outside-symlink-target');
+    writeExtensionPackage(
+      outsideDir,
+      {
+        id: 'demo.symlink.bypass',
+        name: 'Symlink Bypass Extension',
+        version: '1.0.0',
+        main: 'index.js',
+        permissions: ['audit.write'],
+      },
+      'module.exports.activate = function() {};'
+    );
+    fs.mkdirSync(trustedDir, { recursive: true });
+    // Symlink inside trusted root → points to outside directory
+    const symlinkPath = path.join(trustedDir, 'evil-link');
+    fs.symlinkSync(outsideDir, symlinkPath);
+    host.configure({ trustedPackageRoots: [trustedDir] });
+
+    const installed = host.install({
+      packagePath: symlinkPath,
+      approvedPermissions: ['audit.write'],
+    });
+
+    expect(installed.ok).toBe(false);
+    expect(String(installed.error || '')).toContain('trusted package roots');
+  });
+
+  it('drops extension events when per-window rate limit is exceeded', () => {
+    host.configure({ eventWindowMs: 1000, eventBudgetPerWindow: 1 });
+
+    const installed = host.install({
+      name: 'Rate Limited Script',
+      script: 'api.audit("rate.limit.hit", { id: payload && payload.id ? payload.id : "" });',
+      triggers: ['proxy.intercept'],
+      permissions: ['proxy.intercept.read', 'audit.write'],
+      approvedPermissions: ['proxy.intercept.read', 'audit.write'],
+    });
+    expect(installed.ok).toBe(true);
+
+    host.emitEvent('proxy.intercept', { id: 'first' });
+    host.emitEvent('proxy.intercept', { id: 'second' });
+
+    const listed = host.list();
+    const processed = listed.auditLog.filter(entry => entry.action === 'rate.limit.hit').length;
+    expect(processed).toBe(1);
+    expect(
+      listed.auditLog.some(entry => entry.message === 'Event dropped due to extension rate limit.')
+    ).toBe(true);
+  });
+
   it('uninstall removes extension and dangling subscriptions', () => {
     const packageDir = path.join(tempRoot, 'remove-ext');
     writeExtensionPackage(

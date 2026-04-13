@@ -12,12 +12,13 @@ const net = require('node:net');
 const tls = require('node:tls');
 const { URL } = require('node:url');
 const { randomUUID } = require('node:crypto');
+const { normalizeHeaders: normalizeHeadersUtil } = require('./http-utils');
+const { MAX_REQUEST_BYTES } = require('./limits');
 const interceptEngineModule = require('./intercept-engine');
 const historyLogModule = require('./history-log');
 const rulesEngineModule = require('./rules-engine');
 const caManager = require('../certs/ca-manager');
 
-const MAX_REQUEST_BYTES = 25 * 1024 * 1024; // 25 MB
 const DEFAULT_TOOL_IDENTIFIER_HEADER = 'X-Sentinel-Tool';
 const DEFAULT_TOOL_IDENTIFIER_VALUE = 'Gulp-Sentinel';
 
@@ -107,21 +108,11 @@ function setForwardRuntimeConfig(config = {}) {
 }
 
 function getForwardRuntimeConfig() {
-	return JSON.parse(JSON.stringify(forwardRuntimeConfig));
+	return structuredClone(forwardRuntimeConfig);
 }
 
-function normalizeHeaders(rawHeaders = {}) {
-	const normalized = {};
-	for (const [name, value] of Object.entries(rawHeaders || {})) {
-		const key = String(name).toLowerCase();
-		if (Array.isArray(value)) {
-			normalized[key] = value.join(', ');
-		} else {
-			normalized[key] = value === undefined ? '' : String(value);
-		}
-	}
-	return normalized;
-}
+// Delegate to centralised http-utils implementation
+const normalizeHeaders = normalizeHeadersUtil;
 
 function isTextualContentType(contentType = '') {
 	const value = String(contentType || '').toLowerCase();
@@ -155,6 +146,47 @@ function readBody(req) {
 	});
 }
 
+function parsePort(value) {
+	const port = Number(value);
+	return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+}
+
+function parseBracketHostAndPort(raw, defaultPort) {
+	if (!raw.startsWith('[')) {
+		return null;
+	}
+
+	const end = raw.indexOf(']');
+	if (end <= 0) {
+		return null;
+	}
+
+	const host = raw.slice(1, end);
+	const rest = raw.slice(end + 1);
+	if (!rest.startsWith(':')) {
+		return { host, port: defaultPort };
+	}
+
+	const port = parsePort(rest.slice(1));
+	return { host, port: port === null ? defaultPort : port };
+}
+
+function parseSingleColonHostAndPort(raw) {
+	const colonCount = (raw.match(/:/g) || []).length;
+	if (colonCount !== 1) {
+		return null;
+	}
+
+	const separator = raw.lastIndexOf(':');
+	const host = raw.slice(0, separator);
+	const port = parsePort(raw.slice(separator + 1));
+	if (!host || port === null) {
+		return null;
+	}
+
+	return { host, port };
+}
+
 function parseHostAndPort(hostHeader = '', protocol = 'http:') {
 	const raw = String(hostHeader || '').trim();
 	const defaultPort = protocol === 'https:' ? 443 : 80;
@@ -163,29 +195,14 @@ function parseHostAndPort(hostHeader = '', protocol = 'http:') {
 		return { host: 'localhost', port: defaultPort };
 	}
 
-	if (raw.startsWith('[')) {
-		const end = raw.indexOf(']');
-		if (end > 0) {
-			const host = raw.slice(1, end);
-			const rest = raw.slice(end + 1);
-			if (rest.startsWith(':')) {
-				const port = Number(rest.slice(1));
-				if (Number.isInteger(port) && port > 0 && port <= 65535) {
-					return { host, port };
-				}
-			}
-			return { host, port: defaultPort };
-		}
+	const bracket = parseBracketHostAndPort(raw, defaultPort);
+	if (bracket) {
+		return bracket;
 	}
 
-	const colonCount = (raw.match(/:/g) || []).length;
-	if (colonCount === 1) {
-		const separator = raw.lastIndexOf(':');
-		const host = raw.slice(0, separator);
-		const port = Number(raw.slice(separator + 1));
-		if (host && Number.isInteger(port) && port > 0 && port <= 65535) {
-			return { host, port };
-		}
+	const singleColon = parseSingleColonHostAndPort(raw);
+	if (singleColon) {
+		return singleColon;
 	}
 
 	return { host: raw, port: defaultPort };
@@ -206,13 +223,60 @@ function formatAuthority(host, port, protocol = 'http:') {
 	return name;
 }
 
+function buildResolvedUrl(protocol, host, port, pathValue) {
+	const authority = formatAuthority(host, port, protocol);
+	return `${protocol}//${authority}${pathValue}`;
+}
+
+function resolveHttpTarget(req, context, normalizedHeaders) {
+	const isTls = Boolean(context.tls);
+	const contextHost = String(context.host || '');
+	const defaultPort = isTls ? 443 : 80;
+	const contextPort = Number(context.port || defaultPort);
+	const hasContextPort = context.port !== undefined;
+	const protocol = isTls ? 'https:' : 'http:';
+	const target = /^https?:\/\//i.test(req.url || '') ? new URL(req.url) : null;
+	const parsedHost = parseHostAndPort(normalizedHeaders.host || contextHost, protocol);
+	const resolvedHost = target ? target.hostname : (contextHost || parsedHost.host);
+
+	let resolvedPort = parsedHost.port;
+	if (target) {
+		const targetDefaultPort = target.protocol === 'https:' ? 443 : 80;
+		resolvedPort = Number(target.port || targetDefaultPort);
+	} else if (hasContextPort) {
+		resolvedPort = contextPort;
+	}
+
+	const resolvedPath = target ? `${target.pathname || '/'}${target.search || ''}` : (req.url || '/');
+	const resolvedUrl = target
+		? target.toString()
+		: buildResolvedUrl(protocol, resolvedHost, resolvedPort, resolvedPath);
+	const queryString = target ? String(target.search || '').replaceAll(/^\?/g, '') : '';
+	let requestProtocol = isTls ? 'https' : 'http';
+	if (target) {
+		requestProtocol = target.protocol.replaceAll(':', '');
+	}
+
+	return {
+		isTls,
+		protocol,
+		target,
+		resolvedHost,
+		resolvedPort,
+		resolvedPath,
+		resolvedUrl,
+		queryString,
+		requestProtocol,
+	};
+}
+
 function resolveTargetUrl(request) {
 	if (request.url && /^https?:\/\//i.test(request.url)) {
 		return new URL(request.url);
 	}
 
 	const protocol = request.tls ? 'https:' : 'http:';
-	const parsedHost = parseHostAndPort(request.headers && request.headers.host, protocol);
+	const parsedHost = parseHostAndPort(request.headers?.host, protocol);
 	const host = request.host || parsedHost.host;
 	const port = request.port || parsedHost.port;
 	const authority = formatAuthority(host, port, protocol);
@@ -239,8 +303,8 @@ async function forwardRequest(request, log) {
 	const runtimeConfig = getForwardRuntimeConfig();
 	if (typeof log === 'function') {
 		log('info', 'forward:start', {
-			requestId: request && request.id,
-			method: request && request.method,
+			requestId: request?.id,
+			method: request?.method,
 			url: targetUrl.toString(),
 			timeoutMs: FORWARD_TIMEOUT_MS,
 		});
@@ -266,7 +330,7 @@ async function forwardRequest(request, log) {
 		headers[String(name).toLowerCase()] = String(value);
 	}
 
-	if (runtimeConfig.toolIdentifier && runtimeConfig.toolIdentifier.enabled) {
+	if (runtimeConfig.toolIdentifier?.enabled) {
 		headers[String(runtimeConfig.toolIdentifier.headerName || DEFAULT_TOOL_IDENTIFIER_HEADER).toLowerCase()] = String(
 			runtimeConfig.toolIdentifier.value || DEFAULT_TOOL_IDENTIFIER_VALUE
 		);
@@ -303,10 +367,10 @@ async function forwardRequest(request, log) {
 		}, upstreamRes => {
 			if (typeof log === 'function') {
 				log('info', 'forward:response', {
-					requestId: request && request.id,
-					statusCode: upstreamRes && upstreamRes.statusCode,
-					statusMessage: upstreamRes && upstreamRes.statusMessage,
-					contentType: upstreamRes && upstreamRes.headers ? upstreamRes.headers['content-type'] : '',
+					requestId: request?.id,
+					statusCode: upstreamRes?.statusCode,
+					statusMessage: upstreamRes?.statusMessage,
+					contentType: upstreamRes?.headers?.['content-type'] || '',
 				});
 			}
 			const ttfb = Date.now() - requestStart;
@@ -353,8 +417,8 @@ async function forwardRequest(request, log) {
 		upstreamReq.on('error', (error) => {
 			if (typeof log === 'function') {
 				log('error', 'forward:error', {
-					requestId: request && request.id,
-					message: error && error.message ? error.message : String(error),
+					requestId: request?.id,
+					message: error?.message || String(error),
 				});
 			}
 			reject(error);
@@ -362,7 +426,7 @@ async function forwardRequest(request, log) {
 		upstreamReq.on('timeout', () => {
 			if (typeof log === 'function') {
 				log('warn', 'forward:timeout', {
-					requestId: request && request.id,
+					requestId: request?.id,
 					timeoutMs: FORWARD_TIMEOUT_MS,
 					url: targetUrl.toString(),
 				});
@@ -421,9 +485,9 @@ class ProtocolSupport {
 		this.server = http.createServer((req, res) => {
 			this.handleHttpRequest(req, res).catch(async error => {
 				this.log('error', 'proxy:http:handler-error', {
-					method: req && req.method,
-					url: req && req.url,
-					error: error && error.message ? error.message : String(error),
+					method: req?.method,
+					url: req?.url,
+					error: error?.message || String(error),
 				});
 				const fallbackStatus = 502;
 				res.writeHead(fallbackStatus, { 'content-type': 'text/plain; charset=utf-8' });
@@ -473,8 +537,8 @@ class ProtocolSupport {
 		// Handle HTTPS CONNECT tunnels for MITM interception.
 		this.server.on('connect', (req, socket, head) => {
 			this.log('info', 'proxy:connect:received', {
-				url: req && req.url,
-				headBytes: head && head.length ? head.length : 0,
+				url: req?.url,
+				headBytes: head?.length || 0,
 			});
 			this.handleConnect(req, socket, head).catch(() => {
 				try { socket.destroy(); } catch {
@@ -570,8 +634,8 @@ class ProtocolSupport {
 		const tmpServer = http.createServer();
 		tmpServer.on('request', (innerReq, innerRes) => {
 			this.log('info', 'proxy:connect:tunnel-request', {
-				method: innerReq && innerReq.method,
-				url: innerReq && innerReq.url,
+				method: innerReq?.method,
+				url: innerReq?.url,
 				targetHost,
 				targetPort,
 			});
@@ -599,6 +663,44 @@ class ProtocolSupport {
 		tlsSocket.once('error', cleanup);
 	}
 
+	async handleDroppedRequest(result, resolvedUrl, res) {
+		this.log('warn', 'proxy:http:dropped', {
+			requestId: result?.request?.id || '',
+			url: result?.request?.url || resolvedUrl,
+		});
+		await this.historyLog.logTraffic({
+			kind: 'http',
+			request: result.request,
+			response: null,
+		});
+
+		res.writeHead(499, { 'content-type': 'text/plain; charset=utf-8' });
+		res.end('Request dropped by Sentinel proxy');
+	}
+
+	async handleForwardedRequest(result, res) {
+		const responseModel = result.response;
+		this.log('info', 'proxy:http:response', {
+			requestId: result?.request?.id || '',
+			statusCode: responseModel?.statusCode,
+			statusMessage: responseModel?.statusMessage,
+			contentType: responseModel?.contentType,
+			bodyLength: responseModel?.bodyLength,
+		});
+
+		await this.historyLog.logTraffic({
+			kind: 'http',
+			request: result.request,
+			response: {
+				...responseModel,
+				rawBody: undefined,
+			},
+		});
+
+		res.writeHead(responseModel.statusCode, responseModel.statusMessage, responseModel.headers || {});
+		res.end(responseModel.rawBody || Buffer.from(responseModel.body || '', 'utf8'));
+	}
+
 	async handleHttpRequest(req, res, context = {}) {
 		const bodyBuffer = await readBody(req);
 		const timestamp = Date.now();
@@ -609,22 +711,8 @@ class ProtocolSupport {
 			? bodyBuffer.toString('utf8')
 			: null;
 		const rawBodyBase64 = bodyBuffer.length > 0 ? bodyBuffer.toString('base64') : null;
-
-		// When called from an HTTPS CONNECT tunnel, context carries host/port/tls.
-		const isTls = !!context.tls;
-		const contextHost = String(context.host || '');
-		const contextPort = Number(context.port || (isTls ? 443 : 80));
-		const protocol = isTls ? 'https:' : 'http:';
-
-		const target = /^https?:\/\//i.test(req.url || '') ? new URL(req.url) : null;
-		const parsedHost = parseHostAndPort(normalizedHeaders.host || contextHost, protocol);
-		const resolvedHost = target ? target.hostname : (contextHost || parsedHost.host);
-		const resolvedPort = target
-			? Number(target.port || (target.protocol === 'https:' ? 443 : 80))
-			: (context.port !== undefined ? contextPort : parsedHost.port);
-		const resolvedPath = target ? `${target.pathname || '/'}${target.search || ''}` : (req.url || '/');
-		const resolvedUrl = target ? target.toString()
-			: `${protocol}//${resolvedHost}${resolvedPort !== (isTls ? 443 : 80) ? `:${resolvedPort}` : ''}${resolvedPath}`;
+		const targetInfo = resolveHttpTarget(req, context, normalizedHeaders);
+		const { isTls, resolvedHost, resolvedPort, resolvedPath, resolvedUrl, queryString, requestProtocol } = targetInfo;
 
 		this.log('info', 'proxy:http:captured', {
 			method: (req.method || 'GET').toUpperCase(),
@@ -643,7 +731,7 @@ class ProtocolSupport {
 			host: resolvedHost,
 			port: resolvedPort,
 			path: resolvedPath,
-			queryString: target ? (target.search || '').replace(/^\?/, '') : '',
+			queryString,
 			headers: normalizedHeaders,
 			body: bodyText,
 			rawBodyBase64,
@@ -652,7 +740,7 @@ class ProtocolSupport {
 			tags: [],
 			comment: '',
 			inScope: this.scopeEvaluator ? this.scopeEvaluator({
-				protocol: target ? target.protocol.replace(':', '') : (isTls ? 'https' : 'http'),
+				protocol: requestProtocol,
 				host: resolvedHost,
 				port: resolvedPort,
 				path: resolvedPath,
@@ -674,41 +762,11 @@ class ProtocolSupport {
 		}, { bypassQueue: bypassInterceptQueue });
 
 		if (result.action === 'dropped') {
-			this.log('warn', 'proxy:http:dropped', {
-				requestId: result && result.request ? result.request.id : '',
-				url: result && result.request ? result.request.url : resolvedUrl,
-			});
-			await this.historyLog.logTraffic({
-				kind: 'http',
-				request: result.request,
-				response: null,
-			});
-
-			res.writeHead(499, { 'content-type': 'text/plain; charset=utf-8' });
-			res.end('Request dropped by Sentinel proxy');
+			await this.handleDroppedRequest(result, resolvedUrl, res);
 			return;
 		}
 
-		const responseModel = result.response;
-		this.log('info', 'proxy:http:response', {
-			requestId: result && result.request ? result.request.id : '',
-			statusCode: responseModel && responseModel.statusCode,
-			statusMessage: responseModel && responseModel.statusMessage,
-			contentType: responseModel && responseModel.contentType,
-			bodyLength: responseModel && responseModel.bodyLength,
-		});
-
-		await this.historyLog.logTraffic({
-			kind: 'http',
-			request: result.request,
-			response: {
-				...responseModel,
-				rawBody: undefined,
-			},
-		});
-
-		res.writeHead(responseModel.statusCode, responseModel.statusMessage, responseModel.headers || {});
-		res.end(responseModel.rawBody || Buffer.from(responseModel.body || '', 'utf8'));
+		await this.handleForwardedRequest(result, res);
 	}
 
 	async forwardHttpRequest(request) {
@@ -730,3 +788,6 @@ module.exports.createProtocolSupport = createProtocolSupport;
 module.exports.forwardRequest = forwardRequest;
 module.exports.setForwardRuntimeConfig = setForwardRuntimeConfig;
 module.exports.getForwardRuntimeConfig = getForwardRuntimeConfig;
+module.exports.normalizeForwardRuntimeConfig = normalizeForwardRuntimeConfig;
+module.exports.DEFAULT_TOOL_IDENTIFIER_HEADER = DEFAULT_TOOL_IDENTIFIER_HEADER;
+module.exports.DEFAULT_TOOL_IDENTIFIER_VALUE = DEFAULT_TOOL_IDENTIFIER_VALUE;

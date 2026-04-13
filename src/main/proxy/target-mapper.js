@@ -10,18 +10,10 @@ SEN-018 Target mapping and scope enforcement
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-
-const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+const { clone, splitLines, normalizeText } = require('./http-utils');
+const { MAX_IMPORT_FILE_BYTES } = require('./limits');
 const BURP_EXTENSIONS = new Set(['.xml', '.json']);
 const CSV_EXTENSIONS = new Set(['.csv']);
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
-
-function normalizeText(value) {
-	return String(value || '').trim();
-}
 
 function normalizeHost(host) {
 	return normalizeText(host).toLowerCase();
@@ -73,26 +65,53 @@ function parseAuthority(raw) {
 		return { host: '', port: null };
 	}
 
-	if (text.startsWith('[')) {
-		const end = text.indexOf(']');
-		if (end > 0) {
-			const host = text.slice(1, end);
-			const rest = text.slice(end + 1);
-			if (rest.startsWith(':')) {
-				const parsed = Number(rest.slice(1));
-				return { host: normalizeHost(host), port: Number.isInteger(parsed) ? parsed : null };
-			}
-			return { host: normalizeHost(host), port: null };
-		}
+	const bracket = parseBracketAuthority(text);
+	if (bracket) {
+		return bracket;
 	}
 
+	const hostPort = parseSingleColonAuthority(text);
+	if (hostPort) {
+		return hostPort;
+	}
+
+	return { host: normalizeHost(text), port: null };
+}
+
+
+function parseBracketAuthority(text) {
+	if (!text.startsWith('[')) {
+		return null;
+	}
+	const end = text.indexOf(']');
+	if (end <= 0) {
+		return null;
+	}
+
+	const host = text.slice(1, end);
+	const rest = text.slice(end + 1);
+	if (!rest.startsWith(':')) {
+		return { host: normalizeHost(host), port: null };
+	}
+
+	const parsed = Number(rest.slice(1));
+	return {
+		host: normalizeHost(host),
+		port: Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : null,
+	};
+}
+
+
+function parseSingleColonAuthority(text) {
 	const idx = text.lastIndexOf(':');
-	if (idx > 0 && idx === text.indexOf(':')) {
-		const host = text.slice(0, idx);
-		const maybePort = Number(text.slice(idx + 1));
-		if (Number.isInteger(maybePort) && maybePort > 0 && maybePort <= 65535) {
-			return { host: normalizeHost(host), port: maybePort };
-		}
+	if (idx <= 0 || idx !== text.indexOf(':')) {
+		return null;
+	}
+
+	const host = text.slice(0, idx);
+	const maybePort = Number(text.slice(idx + 1));
+	if (Number.isInteger(maybePort) && maybePort > 0 && maybePort <= 65535) {
+		return { host: normalizeHost(host), port: maybePort };
 	}
 
 	return { host: normalizeHost(text), port: null };
@@ -103,7 +122,7 @@ function ipToInt(ip) {
 	if (parts.length !== 4) {
 		return null;
 	}
-	const octets = parts.map(part => Number(part));
+	const octets = parts.map(Number);
 	if (octets.some(octet => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
 		return null;
 	}
@@ -147,28 +166,24 @@ function hostMatches(host, hostPattern) {
 }
 
 function extractTarget(input = {}) {
-	const source = input.request || input;
+	const source = input?.request || input;
 	const rawUrl = normalizeText(source.url);
 	let protocol = normalizeText(source.protocol).toLowerCase();
 	let host = normalizeHost(source.host);
 	let port = source.port == null ? null : Number(source.port);
 	let path = normalizeText(source.path || '/');
 
-	if (rawUrl) {
-		try {
-			const parsed = new URL(rawUrl);
-			protocol = normalizeText(parsed.protocol).replace(':', '').toLowerCase() || protocol;
-			host = normalizeHost(parsed.hostname) || host;
-			if (!port) {
-				port = parsed.port ? Number(parsed.port) : null;
-			}
-			path = `${parsed.pathname || '/'}${parsed.search || ''}`;
-		} catch {
-			// Ignore malformed URL and use host/path fields.
+	const parsedUrl = parseUrlTarget(rawUrl);
+	if (parsedUrl) {
+		protocol = parsedUrl.protocol || protocol;
+		host = parsedUrl.host || host;
+		if (!port) {
+			port = parsedUrl.port;
 		}
+		path = parsedUrl.path || path;
 	}
 
-	if (!host && source.headers && source.headers.host) {
+	if (!host && source?.headers?.host) {
 		const authority = parseAuthority(source.headers.host);
 		host = authority.host;
 		if (!port && authority.port) {
@@ -176,17 +191,9 @@ function extractTarget(input = {}) {
 		}
 	}
 
-	if (!protocol) {
-		protocol = source.tls ? 'https' : 'http';
-	}
-
-	if (!Number.isInteger(port) || port <= 0) {
-		port = protocol === 'https' ? 443 : 80;
-	}
-
-	if (!path.startsWith('/')) {
-		path = `/${path}`;
-	}
+	protocol = protocol || (source?.tls ? 'https' : 'http');
+	port = normalizePortForProtocol(port, protocol);
+	path = normalizePath(path);
 
 	return {
 		protocol,
@@ -195,6 +202,39 @@ function extractTarget(input = {}) {
 		path,
 		ip: normalizeText(source.ip),
 	};
+}
+
+function parseUrlTarget(rawUrl) {
+	if (!rawUrl) {
+		return null;
+	}
+
+	try {
+		const parsed = new URL(rawUrl);
+		return {
+			protocol: normalizeText(parsed.protocol).replaceAll(':', '').toLowerCase(),
+			host: normalizeHost(parsed.hostname),
+			port: parsed.port ? Number(parsed.port) : null,
+			path: `${parsed.pathname || '/'}${parsed.search || ''}`,
+		};
+	} catch {
+		// Ignore malformed URL and use host/path fields.
+		return null;
+	}
+}
+
+function normalizePortForProtocol(port, protocol) {
+	if (Number.isInteger(port) && port > 0) {
+		return port;
+	}
+	return protocol === 'https' ? 443 : 80;
+}
+
+function normalizePath(path) {
+	if (path.startsWith('/')) {
+		return path;
+	}
+	return `/${path}`;
 }
 
 function compileRule(rule = {}) {
@@ -230,29 +270,13 @@ function compileRule(rule = {}) {
 }
 
 function ruleMatchesTarget(rule, target) {
-	if (!rule || !target || !target.host) {
+	if (!rule || !target?.host) {
 		return false;
 	}
 
-	const hasHostRule = Boolean(rule.host);
-	const hasIpRule = Boolean(rule.ip);
-	const hasCidrRule = Boolean(rule._cidr);
-	let matched = false;
-
-	if (hasHostRule && hostMatches(target.host, rule.host)) {
-		matched = true;
-	}
-
-	if (hasIpRule && normalizeHost(target.host) === normalizeHost(rule.ip)) {
-		matched = true;
-	}
-
-	if (hasCidrRule) {
-		const targetIp = ipToInt(target.host);
-		if (targetIp !== null && ((targetIp & rule._cidr.mask) >>> 0) === rule._cidr.base) {
-			matched = true;
-		}
-	}
+	const matched = matchesHostRule(rule, target)
+		|| matchesIpRule(rule, target)
+		|| matchesCidrRule(rule, target);
 
 	if (!matched) {
 		return false;
@@ -266,11 +290,39 @@ function ruleMatchesTarget(rule, target) {
 		return false;
 	}
 
-	if (rule.path && rule.path !== '/' && !String(target.path || '/').startsWith(rule.path)) {
+	return matchesRulePath(rule, target.path);
+}
+
+function matchesHostRule(rule, target) {
+	if (!rule.host) {
 		return false;
 	}
+	return hostMatches(target.host, rule.host);
+}
 
-	return true;
+function matchesIpRule(rule, target) {
+	if (!rule.ip) {
+		return false;
+	}
+	return normalizeHost(target.host) === normalizeHost(rule.ip);
+}
+
+function matchesCidrRule(rule, target) {
+	if (!rule._cidr) {
+		return false;
+	}
+	const targetIp = ipToInt(target.host);
+	if (targetIp === null) {
+		return false;
+	}
+	return ((targetIp & rule._cidr.mask) >>> 0) === rule._cidr.base;
+}
+
+function matchesRulePath(rule, targetPath) {
+	if (!rule.path || rule.path === '/') {
+		return true;
+	}
+	return String(targetPath || '/').startsWith(rule.path);
 }
 
 function parseDelimitedLine(line) {
@@ -300,10 +352,7 @@ function parseDelimitedLine(line) {
 }
 
 function parseCsv(text) {
-	const lines = String(text || '')
-		.split(/\r?\n/g)
-		.map(line => line.trim())
-		.filter(Boolean);
+	const lines = splitLines(text);
 
 	if (lines.length === 0) {
 		return { headers: [], rows: [] };
@@ -340,13 +389,13 @@ function stripBurpRegexHost(raw) {
 	let host = normalizeText(raw);
 	if (!host) return '';
 	// Only transform anchored or escaped regex patterns
-	if (!host.startsWith('^') && !host.includes('\\.')) return host.toLowerCase();
+	if (!host.startsWith('^') && !host.includes(String.raw`\.`)) return host.toLowerCase();
 	if (host.startsWith('^')) host = host.slice(1);
 	if (host.endsWith('$')) host = host.slice(0, -1);
 	// .*\. matches any subdomain prefix — convert to wildcard glob
-	host = host.replace(/\.\*\\\./g, '*.');
+	host = host.replaceAll(String.raw`.*\.`, '*.');
 	// Unescape remaining \. → .
-	host = host.replace(/\\\./g, '.');
+	host = host.replaceAll(String.raw`\.`, '.');
 	return host.toLowerCase();
 }
 
@@ -357,7 +406,7 @@ function extractBurpRegexPort(raw) {
 	const str = String(raw);
 	// Alternation means multiple acceptable ports — treat as wildcard
 	if (str.includes('|')) return null;
-	const cleaned = str.replace(/[\^$()*+?]/g, '').trim();
+	const cleaned = str.replaceAll(/[\^$()*+?]/g, '').trim();
 	const num = Number(cleaned);
 	return Number.isInteger(num) && num > 0 && num <= 65535 ? num : null;
 }
@@ -370,49 +419,73 @@ function stripBurpRegexPath(raw) {
 	if (p.startsWith('^')) p = p.slice(1);
 	if (p.endsWith('$')) p = p.slice(0, -1);
 	// /path/.* → /path/
-	p = p.replace(/\/\.\*$/, '/');
+	p = p.replaceAll(/\/\.\*$/g, '/');
 	return p || '/';
+}
+
+function parseBurpPort(useRegex, rawPort) {
+	if (useRegex) {
+		return extractBurpRegexPort(rawPort);
+	}
+	if (!rawPort) {
+		return null;
+	}
+	return Number(rawPort);
+}
+
+function toValidPortOrNull(port) {
+	return Number.isInteger(port) ? port : null;
+}
+
+function parseBurpXmlItem(item, warnings) {
+	const enabledRaw = stripTag(item, 'enabled').toLowerCase();
+	if (enabledRaw && enabledRaw !== 'true') {
+		return null;
+	}
+
+	const includeRaw = stripTag(item, 'include').toLowerCase();
+	const kind = includeRaw === 'false' ? 'exclude' : 'include';
+	const hostRaw = stripTag(item, 'host') || stripTag(item, 'domain');
+	// Advanced mode XML uses <file> for paths; plain mode may use <path>
+	const pathRaw = stripTag(item, 'path') || stripTag(item, 'file') || '/';
+	const portText = stripTag(item, 'port');
+	const protocolRaw = normalizeText(stripTag(item, 'protocol')).toLowerCase();
+	const useRegex = hostRaw.startsWith('^');
+	const host = useRegex ? stripBurpRegexHost(hostRaw) : normalizeHost(hostRaw);
+	if (!host) {
+		warnings.push('Skipped Burp XML scope item without host/domain.');
+		return null;
+	}
+
+	const path = useRegex ? stripBurpRegexPath(pathRaw) : normalizeText(pathRaw) || '/';
+	const parsedPort = parseBurpPort(useRegex, portText);
+	const protocol = (protocolRaw && protocolRaw !== 'any') ? protocolRaw : null;
+
+	return {
+		kind,
+		host,
+		path,
+		protocol,
+		port: toValidPortOrNull(parsedPort),
+	};
+}
+
+function listXmlScopeItems(text) {
+	const scopeBlockRegex = /<scope[\s\S]*?<\/scope>/gi;
+	const itemRegex = /<item[\s\S]*?<\/item>/gi;
+	const scopes = String(text || '').match(scopeBlockRegex) || [];
+	const items = [];
+	for (const scope of scopes) {
+		items.push(...(scope.match(itemRegex) || []));
+	}
+	return items;
 }
 
 function parseBurpXml(text) {
 	const warnings = [];
-	const rules = [];
-	const scopeBlockRegex = /<scope[\s\S]*?<\/scope>/gi;
-	const itemRegex = /<item[\s\S]*?<\/item>/gi;
-
-	const scopes = String(text || '').match(scopeBlockRegex) || [];
-	for (const scope of scopes) {
-		const items = scope.match(itemRegex) || [];
-		for (const item of items) {
-			const enabledRaw = stripTag(item, 'enabled').toLowerCase();
-			if (enabledRaw && enabledRaw !== 'true') {
-				continue;
-			}
-
-			const includeRaw = stripTag(item, 'include').toLowerCase();
-			const kind = includeRaw === 'false' ? 'exclude' : 'include';
-			const hostRaw = stripTag(item, 'host') || stripTag(item, 'domain');
-			// Advanced mode XML uses <file> for paths; plain mode may use <path>
-			const pathRaw = stripTag(item, 'path') || stripTag(item, 'file') || '/';
-			const portText = stripTag(item, 'port');
-			const protocolRaw = normalizeText(stripTag(item, 'protocol')).toLowerCase();
-			// Detect advanced mode by regex anchor on host field
-			const useRegex = hostRaw.startsWith('^');
-			const host = useRegex ? stripBurpRegexHost(hostRaw) : normalizeHost(hostRaw);
-			const path = useRegex ? stripBurpRegexPath(pathRaw) : normalizeText(pathRaw) || '/';
-			const port = useRegex
-				? extractBurpRegexPort(portText)
-				: (portText ? Number(portText) : null);
-			const protocol = (protocolRaw && protocolRaw !== 'any') ? protocolRaw : null;
-
-			if (!host) {
-				warnings.push('Skipped Burp XML scope item without host/domain.');
-				continue;
-			}
-
-			rules.push({ kind, host, path, protocol, port: Number.isInteger(port) ? port : null });
-		}
-	}
+	const rules = listXmlScopeItems(text)
+		.map(item => parseBurpXmlItem(item, warnings))
+		.filter(Boolean);
 
 	return { rules, warnings };
 }
@@ -427,19 +500,17 @@ function parseBurpJson(text) {
 	}
 
 	// advanced_mode means host/port/file fields are regex patterns, not plain strings
-	const isAdvancedMode = Boolean(
-		payload.target && payload.target.scope && payload.target.scope.advanced_mode
-	);
+	const isAdvancedMode = Boolean(payload.target?.scope?.advanced_mode);
 
 	const rawRules = [];
 	if (Array.isArray(payload.scope)) {
 		rawRules.push(...payload.scope);
 	}
 
-	if (payload.target && payload.target.scope && Array.isArray(payload.target.scope.include)) {
+	if (Array.isArray(payload.target?.scope?.include)) {
 		rawRules.push(...payload.target.scope.include.map(entry => ({ ...entry, kind: 'include' })));
 	}
-	if (payload.target && payload.target.scope && Array.isArray(payload.target.scope.exclude)) {
+	if (Array.isArray(payload.target?.scope?.exclude)) {
 		rawRules.push(...payload.target.scope.exclude.map(entry => ({ ...entry, kind: 'exclude' })));
 	}
 
@@ -460,9 +531,7 @@ function parseBurpJson(text) {
 			const path = useRegex
 				? stripBurpRegexPath(entry.file || entry.path)
 				: normalizeText(entry.path || entry.file || '/') || '/';
-			const port = useRegex
-				? extractBurpRegexPort(entry.port) || null
-				: (entry.port ? Number(entry.port) : null);
+			const port = parseBurpPort(useRegex, entry.port);
 			const protocolRaw = normalizeText(entry.protocol).toLowerCase();
 			const protocol = (protocolRaw && protocolRaw !== 'any') ? protocolRaw : null;
 
@@ -471,7 +540,7 @@ function parseBurpJson(text) {
 				host,
 				path,
 				protocol,
-				port: Number.isInteger(port) ? port : null,
+				port: toValidPortOrNull(port),
 				cidr: entry.cidr || null,
 				ip: entry.ip || null,
 			};
@@ -503,7 +572,7 @@ class TargetMapper {
 
 	setScopeRules(rules = []) {
 		if (!Array.isArray(rules)) {
-			throw new Error('scope rules must be an array');
+			throw new TypeError('scope rules must be an array');
 		}
 		const compiled = rules.map(rule => compileRule(rule));
 		this.scopeRules = compiled;
@@ -550,7 +619,7 @@ class TargetMapper {
 
 	applyScopeToTraffic(items = []) {
 		return items.map(item => {
-			if (!item || !item.request) {
+			if (!item?.request) {
 				return clone(item);
 			}
 			const next = clone(item);
@@ -562,74 +631,14 @@ class TargetMapper {
 	buildSiteMap(items = []) {
 		const roots = new Map();
 		const list = this.applyScopeToTraffic(Array.isArray(items) ? items : []);
+		const evaluateScope = request => this.isInScope({ request });
 
 		for (const item of list) {
-			const request = item && item.request ? item.request : null;
-			if (!request || !request.host) {
+			const request = item?.request || null;
+			if (!request?.host) {
 				continue;
 			}
-
-			const host = normalizeHost(request.host);
-			if (!roots.has(host)) {
-				roots.set(host, {
-					id: `host:${host}`,
-					label: host,
-					type: 'host',
-					inScope: this.isInScope({ request }),
-					children: [],
-					childrenByPath: new Map(),
-				});
-			}
-
-			const root = roots.get(host);
-			root.inScope = root.inScope || this.isInScope({ request });
-
-			const pathText = String(request.path || '/').split('?')[0] || '/';
-			const segments = pathText.split('/').filter(Boolean);
-			let parent = root;
-			let cursor = '';
-
-			if (segments.length === 0) {
-				if (!parent.childrenByPath.has('/')) {
-					const leafScope = this.isInScope({ request: { ...request, path: '/' } });
-					const leaf = {
-						id: `${root.id}/`,
-						label: '/',
-						type: 'path',
-						inScope: leafScope,
-						method: request.method || 'GET',
-						statusCode: item.response ? item.response.statusCode : null,
-						children: [],
-						childrenByPath: new Map(),
-					};
-					parent.children.push(leaf);
-					parent.childrenByPath.set('/', leaf);
-				}
-				continue;
-			}
-
-			for (const segment of segments) {
-				cursor += `/${segment}`;
-				if (!parent.childrenByPath.has(cursor)) {
-					const nodeScope = this.isInScope({ request: { ...request, path: cursor } });
-					const node = {
-						id: `${root.id}${cursor}`,
-						label: segment,
-						fullPath: cursor,
-						type: 'path',
-						inScope: nodeScope,
-						method: request.method || 'GET',
-						statusCode: item.response ? item.response.statusCode : null,
-						children: [],
-						childrenByPath: new Map(),
-					};
-					parent.children.push(node);
-					parent.childrenByPath.set(cursor, node);
-				}
-
-				parent = parent.childrenByPath.get(cursor);
-				parent.inScope = parent.inScope || this.isInScope({ request: { ...request, path: cursor } });
-			}
+			addRequestToSiteMap(roots, request, item, evaluateScope);
 		}
 
 		const toPlain = node => ({
@@ -719,6 +728,98 @@ class TargetMapper {
 		const parsed = this.parseCsvImport(raw, format);
 		this.setScopeRules([...this.getScopeRules(), ...parsed.rules]);
 		return { ok: true, imported: parsed.rules.length, warnings: parsed.warnings, rules: this.getScopeRules() };
+	}
+}
+
+function createSiteMapNode({ id, label, fullPath, type = 'path', inScope, method, statusCode }) {
+	return {
+		id,
+		label,
+		fullPath,
+		type,
+		inScope,
+		method,
+		statusCode,
+		children: [],
+		childrenByPath: new Map(),
+	};
+}
+
+function getRequestStatusCode(item) {
+	return item?.response?.statusCode ?? null;
+}
+
+function getPathSegments(path) {
+	const pathText = String(path || '/').split('?')[0] || '/';
+	return pathText.split('/').filter(Boolean);
+}
+
+function getOrCreateRootNode(roots, request, evaluateScope) {
+	const host = normalizeHost(request.host);
+	if (!roots.has(host)) {
+		roots.set(host, createSiteMapNode({
+			id: `host:${host}`,
+			label: host,
+			type: 'host',
+			inScope: evaluateScope(request),
+		}));
+	}
+
+	const root = roots.get(host);
+	root.inScope = root.inScope || evaluateScope(request);
+	return root;
+}
+
+function ensureRootLeaf(root, request, item, evaluateScope) {
+	if (root.childrenByPath.has('/')) {
+		return;
+	}
+
+	const leaf = createSiteMapNode({
+		id: `${root.id}/`,
+		label: '/',
+		fullPath: '/',
+		inScope: evaluateScope({ ...request, path: '/' }),
+		method: request.method || 'GET',
+		statusCode: getRequestStatusCode(item),
+	});
+	root.children.push(leaf);
+	root.childrenByPath.set('/', leaf);
+}
+
+function getOrCreatePathNode(root, parent, request, item, segment, cursor, evaluateScope) {
+	if (!parent.childrenByPath.has(cursor)) {
+		const node = createSiteMapNode({
+			id: `${root.id}${cursor}`,
+			label: segment,
+			fullPath: cursor,
+			inScope: evaluateScope({ ...request, path: cursor }),
+			method: request.method || 'GET',
+			statusCode: getRequestStatusCode(item),
+		});
+		parent.children.push(node);
+		parent.childrenByPath.set(cursor, node);
+	}
+
+	const child = parent.childrenByPath.get(cursor);
+	child.inScope = child.inScope || evaluateScope({ ...request, path: cursor });
+	return child;
+}
+
+function addRequestToSiteMap(roots, request, item, evaluateScope) {
+	const root = getOrCreateRootNode(roots, request, evaluateScope);
+	const segments = getPathSegments(request.path);
+
+	if (segments.length === 0) {
+		ensureRootLeaf(root, request, item, evaluateScope);
+		return;
+	}
+
+	let parent = root;
+	let cursor = '';
+	for (const segment of segments) {
+		cursor += `/${segment}`;
+		parent = getOrCreatePathNode(root, parent, request, item, segment, cursor, evaluateScope);
 	}
 }
 

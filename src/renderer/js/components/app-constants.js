@@ -1,5 +1,3 @@
-'use strict';
-
 /**
  * Shared module-list and description constants consumed by App.jsx and its
  * tests.  Extracting them here ensures tests cannot silently diverge from the
@@ -36,4 +34,4 @@ const moduleDescriptions = {
   Extensions: 'Manage custom tools and extension-provided workflows.',
 };
 
-module.exports = { modules, moduleDescriptions };
+export { modules, moduleDescriptions };

@@ -1,24 +1,37 @@
-const React = require('react');
-const { Box, Button, Code, Flex, Grid, Heading, Text, VStack } = require('@chakra-ui/react');
+import React from 'react';
+import PropTypes from 'prop-types';
+import { Box, Button, Code, Flex, Grid, Heading, Text, VStack } from '@chakra-ui/react';
 
 // Reusable metric card widget for the 3-column dashboard grid.
-function MetricWidget({ title, metrics }) {
+function MetricWidget(props) {
+	const { title, metrics } = props;
+
 	return (
 		<Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel' h='100%'>
-			<Text fontWeight='semibold' mb='3' fontSize='xs' color='fg.muted' textTransform='uppercase' letterSpacing='wider'>
+			<Text fontWeight='semibold' mb='3' fontSize='xs' color='fg.default' textTransform='uppercase' letterSpacing='wider'>
 				{title}
 			</Text>
 			<VStack align='stretch' gap='2'>
 				{metrics.map(({ label, value }) => (
 					<Flex key={label} justify='space-between' align='center'>
 						<Text fontSize='sm' color='fg.muted'>{label}</Text>
-						<Code fontSize='sm'>{String(value)}</Code>
+						<Code fontSize='sm' color='fg.default' bg='bg.subtle'>{String(value)}</Code>
 					</Flex>
 				))}
 			</VStack>
 		</Box>
 	);
 }
+
+MetricWidget.propTypes = {
+	title: PropTypes.string.isRequired,
+	metrics: PropTypes.arrayOf(
+		PropTypes.shape({
+			label: PropTypes.string.isRequired,
+			value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+		})
+	).isRequired,
+};
 
 function DashboardShell() {
 	const [guidance, setGuidance] = React.useState(null);
@@ -35,14 +48,14 @@ function DashboardShell() {
 		let cancelled = false;
 
 		async function loadGuidance() {
-			const sentinel = window.sentinel;
-			if (!sentinel || !sentinel.ca || typeof sentinel.ca.trustGuidance !== 'function') {
+			const sentinel = globalThis.window?.sentinel;
+			if (typeof sentinel?.ca?.trustGuidance !== 'function') {
 				return;
 			}
 
 			try {
 				const payload = await sentinel.ca.trustGuidance();
-				if (!cancelled && payload && payload.guidance) {
+				if (!cancelled && payload?.guidance) {
 					setGuidance(payload.guidance);
 				}
 			} catch {
@@ -57,8 +70,8 @@ function DashboardShell() {
 	}, []);
 
 	React.useEffect(() => {
-		const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
-		if (!sentinel) {
+		const sentinel = globalThis.window?.sentinel ?? null;
+		if (sentinel == null) {
 			return undefined;
 		}
 
@@ -74,13 +87,13 @@ function DashboardShell() {
 				if (cancelled) {
 					return;
 				}
-				if (historyResult && typeof historyResult.total === 'number') {
+				if (typeof historyResult?.total === 'number') {
 					setRequestTotal(historyResult.total);
 				}
-				if (scopeResult && Array.isArray(scopeResult.rules)) {
+				if (Array.isArray(scopeResult?.rules)) {
 					setScopeEntries(scopeResult.rules.length);
 				}
-				if (sitemapResult && Array.isArray(sitemapResult.tree)) {
+				if (Array.isArray(sitemapResult?.tree)) {
 					setDiscoveredHosts(sitemapResult.tree.length);
 				}
 			} catch {
@@ -98,11 +111,11 @@ function DashboardShell() {
 		});
 
 		const unsubScanner = sentinel.scanner.onProgress((payload) => {
-			if (cancelled || !payload || !payload.finding) {
+			if (cancelled || payload?.finding == null) {
 				return;
 			}
 			setFindingsTotal(prev => prev + 1);
-			if (String(payload.finding.severity || '').toLowerCase() === 'critical') {
+			if (String(payload.finding.severity ?? '').toLowerCase() === 'critical') {
 				setFindingsCritical(prev => prev + 1);
 			}
 		});
@@ -133,8 +146,8 @@ function DashboardShell() {
 	];
 
 	return (
-		<Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word'>
-			<Heading size='sm' mb='4'>Dashboard</Heading>
+		<Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' bg='bg.canvas' color='fg.default'>
+			<Heading size='sm' mb='4' color='fg.default'>Dashboard</Heading>
 			<Grid templateColumns='repeat(3, 1fr)' gap='4' mb='4'>
 				<MetricWidget title='Security Metrics' metrics={securityMetrics} />
 				<MetricWidget title='Recent Traffic' metrics={trafficMetrics} />
@@ -142,7 +155,7 @@ function DashboardShell() {
 			</Grid>
 
 			{guidance ? (
-				<Box borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel' overflow='hidden'>
+				<Box borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.surface' overflow='hidden'>
 					<Flex
 						px='4'
 						py='3'
@@ -151,17 +164,17 @@ function DashboardShell() {
 						borderBottomWidth={guidanceOpen ? '1px' : '0'}
 						borderColor='border.default'
 					>
-						<Text fontWeight='semibold' fontSize='sm'>CA Trust Guidance</Text>
+						<Text fontWeight='semibold' fontSize='sm' color='fg.default'>CA Trust Guidance</Text>
 						<Button size='xs' variant='outline' onClick={() => setGuidanceOpen((prev) => !prev)}>
 							{guidanceOpen ? 'Hide' : 'Show'}
 						</Button>
 					</Flex>
 					{guidanceOpen ? (
 						<Box px='4' py='3'>
-							<Text fontSize='sm' color='fg.muted' mb='1'>{guidance.title}</Text>
-							<Text fontSize='sm' mb='1'>Certificate path: <Code>{guidance.certPathHint}</Code></Text>
+							<Text fontSize='sm' color='fg.default' mb='1'>{guidance.title}</Text>
+							<Text fontSize='sm' mb='1'>Certificate path: <Code color='fg.default' bg='bg.subtle'>{guidance.certPathHint}</Code></Text>
 							{guidance.steps.slice(0, 2).map((step, index) => (
-								<Text key={`${index}-${step}`} fontSize='sm'>
+								<Text key={`${index}-${step}`} fontSize='sm' color='fg.default'>
 									{index + 1}. {step}
 								</Text>
 							))}
@@ -178,4 +191,4 @@ function DashboardShell() {
 	);
 }
 
-module.exports = DashboardShell;
+export default DashboardShell;

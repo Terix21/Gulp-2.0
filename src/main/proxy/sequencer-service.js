@@ -9,20 +9,10 @@ SEN-023 Sequencer entropy analysis
 
 const { randomUUID } = require('node:crypto');
 const { forwardRequest: defaultForwardRequest } = require('./protocol-support');
+const { clone, toText, normalizeHeaders, isCookieNameChar, canStartCookiePair, splitCookieLine } = require('./http-utils');
 
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
-
-function toText(value) {
-	if (typeof value === 'string') {
-		return value;
-	}
-	if (value == null) {
-		return '';
-	}
-	return String(value);
-}
+// Maximum accepted length for a user-supplied token key to bound regex/parse complexity.
+const MAX_TOKEN_KEY_LEN = 256;
 
 function shannonEntropyBitsPerChar(values = []) {
 	const text = values.join('');
@@ -95,12 +85,75 @@ function runsTest(values = []) {
 	};
 }
 
-function normalizeHeaders(headers = {}) {
-	const out = {};
-	for (const [name, value] of Object.entries(headers || {})) {
-		out[String(name || '').toLowerCase()] = toText(value);
+// Determines whether a character is a valid token-value character.
+// Matches the same set as the former regex capture group: [A-Za-z0-9._+/=-].
+function isValueChar(ch) {
+	return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+		(ch >= '0' && ch <= '9') || ch === '.' || ch === '_' ||
+		ch === '+' || ch === '/' || ch === '=' || ch === '-';
+}
+
+// Skips common ASCII whitespace (space, tab, CR, LF) to match \s* intent without regex.
+function skipSpaces(text, start) {
+	let i = start;
+	while (i < text.length) {
+		const ch = text[i];
+		if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') {
+			break;
+		}
+		i += 1;
 	}
-	return out;
+	return i;
+}
+
+function readBodyTokenAt(body, start) {
+	let i = skipSpaces(body, start);
+	if (i >= body.length || (body[i] !== ':' && body[i] !== '=')) {
+		return { token: '', nextPos: start + 1 };
+	}
+
+	i += 1;
+	i = skipSpaces(body, i);
+	// Quotes are delimiters and not part of allowed token characters.
+	if (i < body.length && (body[i] === '"' || body[i] === "'")) {
+		i += 1;
+	}
+
+	const valueStart = i;
+	while (i < body.length && isValueChar(body[i])) {
+		i += 1;
+	}
+
+	if (i <= valueStart) {
+		return { token: '', nextPos: start + 1 };
+	}
+
+	return {
+		token: body.slice(valueStart, i),
+		nextPos: start + 1,
+	};
+}
+
+// Deterministic linear scan for "key = value" or "key : value" patterns in body text.
+// Avoids constructing a RegExp from user-supplied key to prevent regex injection and ReDoS.
+function extractBodyToken(body, key) {
+	const lowerBody = body.toLowerCase();
+	const lowerKey = key.toLowerCase();
+	let pos = 0;
+
+	while (pos < body.length) {
+		const idx = lowerBody.indexOf(lowerKey, pos);
+		if (idx === -1) {
+			return '';
+		}
+
+		const result = readBodyTokenAt(body, idx + lowerKey.length);
+		if (result.token) {
+			return result.token;
+		}
+		pos = idx + 1;
+	}
+	return '';
 }
 
 function parseCookies(setCookieHeader) {
@@ -109,7 +162,17 @@ function parseCookies(setCookieHeader) {
 		return [];
 	}
 
-	const segments = value.split(/\r?\n|,(?=\s*[^;=]+=)/g).map(item => item.trim()).filter(Boolean);
+	const normalized = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+	const lines = normalized.split('\n');
+	const segments = [];
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (!trimmed) {
+			continue;
+		}
+		segments.push(...splitCookieLine(trimmed));
+	}
+
 	return segments.map(cookieLine => {
 		const first = cookieLine.split(';')[0] || '';
 		const separator = first.indexOf('=');
@@ -125,10 +188,10 @@ function parseCookies(setCookieHeader) {
 
 function extractToken(response, tokenField = {}) {
 	const source = String(tokenField.source || 'cookie').toLowerCase();
-	const key = toText(tokenField.key || '').trim();
+	const key = toText(tokenField.key || '').trim().slice(0, MAX_TOKEN_KEY_LEN);
 
 	if (source === 'header') {
-		const headers = normalizeHeaders(response && response.headers ? response.headers : {});
+		const headers = normalizeHeaders(response?.headers || {});
 		if (!key) {
 			return headers['authorization'] || '';
 		}
@@ -136,19 +199,17 @@ function extractToken(response, tokenField = {}) {
 	}
 
 	if (source === 'body') {
-		const body = toText(response && response.body ? response.body : '');
+		const body = toText(response?.body || '');
 		if (!body) {
 			return '';
 		}
 		if (!key) {
 			return body;
 		}
-		const regex = new RegExp(`${key}\\s*[:=]\\s*['\"]?([A-Za-z0-9._\\-+/=]+)`, 'i');
-		const match = body.match(regex);
-		return match ? toText(match[1]) : '';
+		return extractBodyToken(body, key);
 	}
 
-	const cookies = parseCookies(response && response.headers ? response.headers['set-cookie'] : '');
+	const cookies = parseCookies(response?.headers?.['set-cookie'] || '');
 	if (!key && cookies.length > 0) {
 		return toText(cookies[0].value);
 	}
@@ -192,18 +253,66 @@ class SequencerService {
 	}
 
 	async _resolveRequestTemplate(config = {}) {
-		if (config.requestTemplate && typeof config.requestTemplate === 'object') {
+		if (config?.requestTemplate && typeof config.requestTemplate === 'object') {
 			return clone(config.requestTemplate);
 		}
 
-		if (config.requestId && this.getTrafficItem) {
+		if (config?.requestId && this.getTrafficItem) {
 			const item = await this.getTrafficItem(config.requestId);
-			if (item && item.request) {
+			if (item?.request) {
 				return clone(item.request);
 			}
 		}
 
-		throw new Error('sequencer capture requires requestTemplate or requestId');
+		throw new TypeError('sequencer capture requires requestTemplate or requestId');
+	}
+
+	async _persistSession(session) {
+		if (!this.upsertSession) {
+			return;
+		}
+		try {
+			await this.upsertSession(clone(session));
+		} catch {
+			// Continue with in-memory session state.
+		}
+	}
+
+	buildCaptureRequest(template) {
+		const request = clone(template);
+		request.id = randomUUID();
+		request.connectionId = randomUUID();
+		request.timestamp = Date.now();
+		return request;
+	}
+
+	async captureTokenSample(session, template, tokenField) {
+		const request = this.buildCaptureRequest(template);
+		const response = await this.forwardRequest(request);
+		const token = extractToken(response, tokenField);
+
+		if (!token) {
+			return;
+		}
+
+		const tokenRow = {
+			id: randomUUID(),
+			sessionId: session.id,
+			position: session.tokens.length,
+			token,
+			capturedAt: Date.now(),
+		};
+		session.tokens.push(tokenRow);
+
+		if (!this.addTokenRow) {
+			return;
+		}
+
+		try {
+			await this.addTokenRow(clone(tokenRow));
+		} catch {
+			// Keep capture running when persistence fails.
+		}
 	}
 
 	async captureStart({ config = {} } = {}) {
@@ -224,53 +333,16 @@ class SequencerService {
 			tokens: [],
 		};
 		this.sessions.set(session.id, session);
-
-		if (this.upsertSession) {
-			try {
-				await this.upsertSession(clone(session));
-			} catch {
-				// Continue with in-memory session.
-			}
-		}
+		await this._persistSession(session);
 
 		for (let position = 0; position < sampleSize; position += 1) {
-			const request = clone(template);
-			request.id = randomUUID();
-			request.connectionId = randomUUID();
-			request.timestamp = Date.now();
-			const response = await this.forwardRequest(request);
-			const token = extractToken(response, tokenField);
-
-			if (token) {
-				const tokenRow = {
-					id: randomUUID(),
-					sessionId: session.id,
-					position: session.tokens.length,
-					token,
-					capturedAt: Date.now(),
-				};
-				session.tokens.push(tokenRow);
-				if (this.addTokenRow) {
-					try {
-						await this.addTokenRow(clone(tokenRow));
-					} catch {
-						// Keep capture running when persistence fails.
-					}
-				}
-			}
+			await this.captureTokenSample(session, template, tokenField);
 		}
 
 		session.status = 'stopped';
 		session.updatedAt = Date.now();
 		this.sessions.set(session.id, session);
-
-		if (this.upsertSession) {
-			try {
-				await this.upsertSession(clone(session));
-			} catch {
-				// Keep in-memory state even if store update fails.
-			}
-		}
+		await this._persistSession(session);
 
 		return {
 			sessionId: session.id,
@@ -366,7 +438,7 @@ class SequencerService {
 				: 'Token source shows predictability signals and should be investigated.',
 			exportCsv: [
 				'position,token',
-				...session.tokens.map(item => `${item.position},"${String(item.token).replace(/"/g, '""')}"`),
+				...session.tokens.map(item => `${item.position},"${String(item.token).replaceAll('"', '""')}"`),
 			].join('\n'),
 		};
 

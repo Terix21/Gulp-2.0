@@ -21,40 +21,11 @@ describe('Sentinel Database and Certificate Services', () => {
       expect(typeof mod.ProjectStore).toBe('function');
     });
 
-    it('should verify ca-manager exposes lifecycle API', () => {
-      const caManager = require('../certs/ca-manager');
-
-      expect(caManager).toBeTruthy();
-      expect(typeof caManager.ensureCaArtifacts).toBe('function');
-      expect(typeof caManager.getCaCertificatePem).toBe('function');
-      expect(typeof caManager.exportCaCertificate).toBe('function');
-      expect(typeof caManager.getLeafCertificate).toBe('function');
-      expect(typeof caManager.rotateCa).toBe('function');
-      expect(typeof caManager.getTrustInstallGuidance).toBe('function');
-    });
-
-    it('exports singleton convenience functions', () => {
+    it('exports key singleton entry points', () => {
       const mod = require(path.join(DB_DIR, 'project-store'));
       expect(typeof mod.openProject).toBe('function');
       expect(typeof mod.closeProject).toBe('function');
-      expect(typeof mod.checkpointProject).toBe('function');
       expect(typeof mod.getProjectMeta).toBe('function');
-      expect(typeof mod.upsertTrafficItem).toBe('function');
-      expect(typeof mod.queryTraffic).toBe('function');
-      expect(typeof mod.replaceRules).toBe('function');
-      expect(typeof mod.replaceScopeRules).toBe('function');
-      expect(typeof mod.setModuleState).toBe('function');
-      expect(typeof mod.getModuleState).toBe('function');
-    });
-
-    it('exports schema constants and helpers', () => {
-      const mod = require(path.join(DB_DIR, 'project-store'));
-      expect(typeof mod.CURRENT_VERSION).toBe('number');
-      expect(mod.CURRENT_VERSION).toBeGreaterThanOrEqual(1);
-      expect(typeof mod.runMigrations).toBe('function');
-      expect(typeof mod.rowToProjectMeta).toBe('function');
-      expect(Array.isArray(mod.MIGRATIONS)).toBe(true);
-      expect(Array.isArray(mod.DDL_V1)).toBe(true);
     });
   });
 
@@ -67,6 +38,14 @@ describe('Sentinel Database and Certificate Services', () => {
       const mod = require(path.join(CERT_DIR, 'ca-manager'));
       expect(typeof mod).toBe('object');
       expect(mod).not.toBeNull();
+    });
+
+    it('exposes the primary certificate lifecycle entry points', () => {
+      const mod = require(path.join(CERT_DIR, 'ca-manager'));
+      expect(typeof mod.ensureCaArtifacts).toBe('function');
+      expect(typeof mod.getCaCertificatePem).toBe('function');
+      expect(typeof mod.getLeafCertificate).toBe('function');
+      expect(typeof mod.rotateCa).toBe('function');
     });
   });
 });

@@ -42,7 +42,7 @@ function sanitizeHost(hostname) {
 	return String(hostname || '')
 		.trim()
 		.toLowerCase()
-		.replace(/[^a-z0-9.-]/g, '_');
+		.replaceAll(/[^a-z0-9.-]/g, '_');
 }
 
 function randomSerialHex() {
@@ -111,7 +111,7 @@ function createCaCertificate() {
 function createLeafCertificate({ hostname, caCert, caPrivateKey }) {
 	const safeHost = sanitizeHost(hostname);
 	if (!safeHost) {
-		throw new Error('getLeafCertificate(hostname) requires a valid hostname');
+		throw new TypeError('getLeafCertificate(hostname) requires a valid hostname');
 	}
 
 	const leafKeys = forge.pki.rsa.generateKeyPair(2048);
@@ -122,9 +122,7 @@ function createLeafCertificate({ hostname, caCert, caPrivateKey }) {
 	cert.validity.notBefore = new Date(Date.now() - 60 * 1000);
 
 	const defaultLeafExpiry = new Date(Date.now() + (397 * 24 * 60 * 60 * 1000));
-	cert.validity.notAfter = caCert.validity.notAfter < defaultLeafExpiry
-		? caCert.validity.notAfter
-		: defaultLeafExpiry;
+	cert.validity.notAfter = new Date(Math.min(caCert.validity.notAfter.getTime(), defaultLeafExpiry.getTime()));
 
 	cert.setSubject([{ name: 'commonName', value: safeHost }]);
 	cert.setIssuer(caCert.subject.attributes);
@@ -313,7 +311,7 @@ class CaManager {
 
 	exportCaCertificate(destPath) {
 		if (!destPath || typeof destPath !== 'string') {
-			throw new Error('exportCaCertificate(destPath) requires a destination path');
+			throw new TypeError('exportCaCertificate(destPath) requires a destination path');
 		}
 
 		if (!path.isAbsolute(destPath)) {
@@ -335,7 +333,7 @@ class CaManager {
 
 		const safeHost = sanitizeHost(hostname);
 		if (!safeHost) {
-			throw new Error('getLeafCertificate(hostname) requires a valid hostname');
+			throw new TypeError('getLeafCertificate(hostname) requires a valid hostname');
 		}
 
 		const certPath = path.join(this.leafDir, `${safeHost}.cert.pem`);

@@ -280,7 +280,7 @@ describe('contracts/ipc-contract', () => {
     const preloadPath = path.resolve(__dirname, '..', 'preload.js');
     const source = fs.readFileSync(preloadPath, 'utf8');
     const matches = [...source.matchAll(/invoke\('([^']+)'/g)].map(m => m[1]);
-    const usedInvoke = [...new Set(matches)].sort();
+    const usedInvoke = [...new Set(matches)].sort((a, b) => a.localeCompare(b));
 
     expect(usedInvoke.length).toBeGreaterThan(0);
 
@@ -295,7 +295,7 @@ describe('contracts/ipc-contract', () => {
     const preloadPath = path.resolve(__dirname, '..', 'preload.js');
     const source = fs.readFileSync(preloadPath, 'utf8');
     const matches = [...source.matchAll(/onPush\('([^']+)'/g)].map(m => m[1]);
-    const usedPush = [...new Set(matches)].sort();
+    const usedPush = [...new Set(matches)].sort((a, b) => a.localeCompare(b));
 
     expect(usedPush.length).toBeGreaterThan(0);
 

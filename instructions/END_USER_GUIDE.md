@@ -1,11 +1,14 @@
 # Sentinel End-User Guide
 
-> **Version: 1.0 — Current as of 2026-04-06 (M1–M9 complete)**
+> **Version: 1.2 - Current as of 2026-04-13 (M1-M9 complete)**
 
 ## What This App Is
 Sentinel is a desktop web-security workbench for capturing, inspecting, replaying, and analyzing HTTP traffic.
 
 ## Quick Start
+Prerequisite:
+- Node.js `>= 24.0.0`
+
 1. Install dependencies:
    - `npm install`
 2. Build the app:
@@ -26,9 +29,9 @@ The UI is a workbench with five core areas:
 ## Settings and Themes
 Open Settings from the toolbar:
 1. Click `Settings`.
-2. Open `Preferences`.
+2. The `Preferences` side panel opens.
 3. Choose a theme in `Theme Options`.
-4. Configure global proxy forwarding behavior in `Proxy Runtime Settings`.
+4. Configure global proxy forwarding behavior in `Proxy Runtime Settings` and click `Save`.
 
 Theme groups:
 - Dark themes: 5 options
@@ -48,6 +51,7 @@ Proxy runtime settings apply across outbound traffic:
 
 ## Keyboard Shortcut
 - Command palette toggle: `Ctrl+K`
+- Close command palette/settings panel: `Esc`
 
 ## Module Guide
 
@@ -84,7 +88,7 @@ Use for payload automation:
 3. Select attack profile (sniper, pitchfork, cluster-bomb).
 4. Start attack and review live results.
 
-### Target Map
+### Target
 Use for scope control:
 1. Add include/exclude rules.
 2. Import scope from Burp files or CSV.
@@ -132,6 +136,11 @@ Use for extension/script automation:
 1. Rebuild: `npm run build`
 2. Restart app: `npm run start`
 
+### App fails to start after dependency updates
+1. Rebuild native modules: `npm run rebuild:native`
+2. Rebuild app artifacts: `npm run build`
+3. Start app again: `npm run start`
+
 ### Blank or stale UI
 1. Run: `npm run clean`
 2. Rebuild: `npm run build`
@@ -152,6 +161,10 @@ Monaco inspector themes follow selected light/dark mode. If you still see stale 
 2. Confirm header format is `Name: value` (lines without `:` are ignored).
 3. Confirm static IP entries are valid routable/local addresses for your host.
 4. Re-send traffic after saving.
+
+### Command palette or settings overlay is stuck open
+1. Press `Esc` to close overlays.
+2. If state still looks stale, rebuild (`npm run build`) and relaunch (`npm run start`).
 
 ## Safety Notes
 - Renderer module UI does not require direct Node.js access.

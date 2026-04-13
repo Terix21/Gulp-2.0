@@ -1,5 +1,6 @@
-const React = require('react');
-const {
+import React from 'react';
+import PropTypes from 'prop-types';
+import {
   Badge,
   Box,
   Button,
@@ -12,8 +13,8 @@ const {
   Text,
   Textarea,
   VStack
-} = require('@chakra-ui/react');
-const {
+} from '@chakra-ui/react';
+import {
   FiHome,
   FiShield,
   FiClock,
@@ -28,26 +29,29 @@ const {
   FiPackage,
   FiChevronsLeft,
   FiChevronsRight,
-  FiChevronRight,
   FiTerminal,
   FiChevronDown,
   FiChevronUp,
   FiTrash2,
   FiSettings,
-} = require('react-icons/fi');
-const DashboardShell = require('./sentinel/DashboardShell');
-const ProxyPanel = require('./sentinel/ProxyPanel');
-const HistoryPanel = require('./sentinel/HistoryPanel');
-const RepeaterPanel = require('./sentinel/RepeaterPanel');
-const IntruderPanel = require('./sentinel/IntruderPanel');
-const TargetMapPanel = require('./sentinel/TargetMapPanel');
-const ScannerPanel = require('./sentinel/ScannerPanel');
-const OobPanel = require('./sentinel/OobPanel');
-const SequencerPanel = require('./sentinel/SequencerPanel');
-const DecoderPanel = require('./sentinel/DecoderPanel');
-const EmbeddedBrowserPanel = require('./sentinel/EmbeddedBrowserPanel');
-const ExtensionsPanel = require('./sentinel/ExtensionsPanel');
-const { modules, moduleDescriptions } = require('./app-constants');
+} from 'react-icons/fi';
+import DashboardShell from './sentinel/DashboardShell';
+import ProxyPanel from './sentinel/ProxyPanel';
+import HistoryPanel from './sentinel/HistoryPanel';
+import RepeaterPanel from './sentinel/RepeaterPanel';
+import IntruderPanel from './sentinel/IntruderPanel';
+import TargetMapPanel from './sentinel/TargetMapPanel';
+import ScannerPanel from './sentinel/ScannerPanel';
+import OobPanel from './sentinel/OobPanel';
+import SequencerPanel from './sentinel/SequencerPanel';
+import DecoderPanel from './sentinel/DecoderPanel';
+import EmbeddedBrowserPanel from './sentinel/EmbeddedBrowserPanel';
+import ExtensionsPanel from './sentinel/ExtensionsPanel';
+import { modules, moduleDescriptions } from './app-constants';
+import { getOverlayScrim } from './sentinel/theme-utils';
+
+const buildInfoModules = import.meta.glob('../../../contracts/build-info.json', { eager: true });
+const generatedBuildInfo = buildInfoModules['../../../contracts/build-info.json']?.default ?? {};
 
 const panelStatusFields = {
   Dashboard: [
@@ -155,11 +159,11 @@ const moduleIcons = {
 };
 
 function formatMemoryUsageMb() {
-  if (typeof performance !== 'undefined' && performance.memory && performance.memory.usedJSHeapSize) {
-    return `${Math.round(performance.memory.usedJSHeapSize / (1024 * 1024))} MB`;
+  if (globalThis.performance?.memory?.usedJSHeapSize) {
+    return `${Math.round(globalThis.performance.memory.usedJSHeapSize / (1024 * 1024))} MB`;
   }
-  if (typeof navigator !== 'undefined' && navigator.deviceMemory) {
-    return `~${navigator.deviceMemory} GB device`;
+  if (globalThis.navigator?.deviceMemory) {
+    return `~${globalThis.navigator.deviceMemory} GB device`;
   }
   return 'n/a';
 }
@@ -345,13 +349,10 @@ const THEME_GROUPS = [
 ];
 
 function getInitialThemeId() {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const storedThemeId = window.localStorage.getItem('sentinel-theme-id');
-    if (storedThemeId && THEME_REGISTRY[storedThemeId]) {
-      return storedThemeId;
-    }
+  const storedThemeId = globalThis.window?.localStorage?.getItem('sentinel-theme-id');
+  if (storedThemeId && THEME_REGISTRY[storedThemeId]) {
+    return storedThemeId;
   }
-
   return 'dark-steel';
 }
 
@@ -364,12 +365,20 @@ function applyThemeToDocument(themeId) {
   const root = document.documentElement;
   const body = document.body;
 
-  root.setAttribute('data-theme', theme.mode);
-  root.setAttribute('data-sentinel-theme-id', themeId);
+  root.dataset.theme = theme.mode;
+  root.dataset.sentinelThemeId = themeId;
   root.style.colorScheme = theme.mode;
 
+  if (theme.mode === 'dark') {
+    root.classList.add('dark');
+    root.classList.remove('light');
+  } else {
+    root.classList.add('light');
+    root.classList.remove('dark');
+  }
+
   Object.entries(theme.colors).forEach(([token, value]) => {
-    const cssName = token.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+    const cssName = token.replaceAll(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
     root.style.setProperty(`--sentinel-${cssName}`, value);
   });
 
@@ -378,17 +387,19 @@ function applyThemeToDocument(themeId) {
     body.style.color = theme.colors.fgDefault;
   }
 
-  if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.setItem('sentinel-theme-id', themeId);
-  }
+  globalThis.window?.localStorage?.setItem('sentinel-theme-id', themeId);
 }
 
 function renderConsoleExportLine(entry) {
-  const timestamp = Number(entry && entry.timestamp);
-  const level = String(entry && entry.level ? entry.level : 'info').toUpperCase();
-  const source = String(entry && entry.source ? entry.source : 'app');
-  const message = String(entry && entry.message ? entry.message : '');
-  const detail = entry && entry.detail !== undefined && entry.detail !== null ? ` | ${String(entry.detail)}` : '';
+  const timestamp = Number(entry?.timestamp);
+  const level = String(entry?.level ?? 'info').toUpperCase();
+  const source = String(entry?.source ?? 'app');
+  const message = String(entry?.message ?? '');
+  const detailValue = entry?.detail;
+  let detail = '';
+  if (detailValue !== undefined && detailValue !== null) {
+    detail = ` | ${String(detailValue)}`;
+  }
   const renderedTimestamp = Number.isFinite(timestamp)
     ? new Date(timestamp).toISOString()
     : new Date().toISOString();
@@ -397,70 +408,275 @@ function renderConsoleExportLine(entry) {
 }
 
 function downloadConsoleLogs(entries) {
-  if (typeof document === 'undefined' || typeof window === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+  if (typeof document === 'undefined' || globalThis.window === undefined || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
     return false;
   }
 
   const records = Array.isArray(entries) ? entries : [];
   const content = `${records.map(renderConsoleExportLine).join('\n')}\n`;
-  const blob = new window.Blob([content], { type: 'text/plain;charset=utf-8' });
+  const blob = new globalThis.window.Blob([content], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const stamp = new Date().toISOString().replace(/[.:]/g, '-');
+  const stamp = new Date().toISOString().replaceAll(/[.:]/g, '-');
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `sentinel-app-log-${stamp}.log`;
   anchor.style.display = 'none';
   document.body.appendChild(anchor);
   anchor.click();
-  document.body.removeChild(anchor);
+  anchor.remove();
   URL.revokeObjectURL(url);
   return true;
 }
 
-function App() {
-  const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
-  const [openPanes, setOpenPanes] = React.useState(['Dashboard', 'Proxy']);
-  const [activePane, setActivePane] = React.useState('Dashboard');
-  const [proxyRunning, setProxyRunning] = React.useState(true);
-  const [panelStatus, setPanelStatus] = React.useState(defaultPanelStatus);
-  const [contextCollapsed, setContextCollapsed] = React.useState(false);
-  const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
-  const [commandQuery, setCommandQuery] = React.useState('');
-  const [memoryUsage, setMemoryUsage] = React.useState(formatMemoryUsageMb());
-  const [selectedThemeId, setSelectedThemeId] = React.useState(getInitialThemeId);
-  const selectedTheme = THEME_REGISTRY[selectedThemeId] || FALLBACK_THEME;
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
+function parseHeadersText(text) {
+  const map = {};
+  for (const rawLine of String(text || '').split(/\r?\n/g)) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    const separator = line.indexOf(':');
+    if (separator <= 0) {
+      continue;
+    }
+    const name = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    if (!name) {
+      continue;
+    }
+    map[name] = value;
+  }
+  return map;
+}
+
+function parseStaticIpsText(text) {
+  const out = [];
+  const seen = new Set();
+  for (const token of String(text || '').split(/\r?\n|,/g)) {
+    const ip = token.trim();
+    if (!ip || seen.has(ip)) {
+      continue;
+    }
+    seen.add(ip);
+    out.push(ip);
+  }
+  return out;
+}
+
+function getFilterBadgePalette(lvl) {
+  if (lvl === 'error') return 'red';
+  if (lvl === 'warn') return 'orange';
+  return 'blue';
+}
+
+function ConsoleDrawer(props) {
+  const {
+    isOpen,
+    logs,
+    filter,
+    autoScroll,
+    endRef,
+    theme,
+    onFilterChange,
+    onAutoScrollToggle,
+    onClear,
+    onExport,
+  } = props;
+  const levelColor = { info: theme.colors.fgDefault, warn: 'orange.600', error: 'red.600' };
+  const levelBg = {
+    info: 'transparent',
+    warn: 'rgba(221, 107, 32, 0.10)',
+    error: 'rgba(229, 62, 62, 0.10)'
+  };
+  const filteredLogs = filter === 'all' ? logs : logs.filter(e => e.level === filter);
+  return (
+    <Box
+      borderTopWidth='1px'
+      borderColor={theme.colors.borderDefault}
+      bg={theme.colors.bgElevated}
+      style={{ transition: 'height 0.2s ease' }}
+      h={isOpen ? '200px' : '0px'}
+      overflow='hidden'
+      display='flex'
+      flexDirection='column'
+    >
+      {isOpen ? (
+        <Flex direction='column' h='100%'>
+          <Flex
+            px='3'
+            py='1'
+            borderBottomWidth='1px'
+            borderColor={theme.colors.borderSubtle}
+            align='center'
+            gap='2'
+            flex='0 0 auto'
+            bg={theme.colors.bgPanel}
+          >
+            <HStack gap='1' flex='0 0 auto'>
+              <Box w='6px' h='6px' borderRadius='full' bg='green.400' />
+              <Text fontSize='xs' color={theme.colors.fgMuted}>Live Output</Text>
+            </HStack>
+            <HStack gap='1' flex='1'>
+              {['all', 'info', 'warn', 'error'].map(lvl => {
+                const isActive = filter === lvl;
+                let countBadge = null;
+                if (lvl === 'info' || lvl === 'warn' || lvl === 'error') {
+                  const badgeColors = {
+                    info: { border: 'blue.500', bg: 'rgba(59,130,246,0.1)' },
+                    warn: { border: 'orange.500', bg: 'rgba(249,115,22,0.1)' },
+                    error: { border: 'red.500', bg: 'rgba(239,68,68,0.1)' }
+                  };
+                  countBadge = (
+                    <Badge ml='1' variant='outline' color='var(--sentinel-fg-default)' borderColor={badgeColors[lvl].border} bg={badgeColors[lvl].bg} size='xs'>
+                      {logs.filter(e => e.level === lvl).length}
+                    </Badge>
+                  );
+                }
+                return (
+                  <Button
+                    key={lvl}
+                    size='xs'
+                    variant={isActive ? 'solid' : 'ghost'}
+                    colorPalette={getFilterBadgePalette(lvl)}
+                    onClick={() => onFilterChange(lvl)}
+                  >
+                    {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                    {countBadge}
+                  </Button>
+                );
+              })}
+            </HStack>
+            <Button
+              size='xs'
+              variant='ghost'
+              color={autoScroll ? theme.colors.fgDefault : theme.colors.fgMuted}
+              _hover={{ bg: theme.colors.bgSubtle }}
+              onClick={onAutoScrollToggle}
+              title={autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
+              aria-label={autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
+            >
+              {autoScroll ? 'Pause Auto-Scroll' : 'Resume Auto-Scroll'}
+            </Button>
+            <Button
+              size='xs'
+              variant='ghost'
+              color={theme.colors.fgMuted}
+              _hover={{ bg: theme.colors.bgSubtle }}
+              onClick={onExport}
+              title='Export console logs'
+              aria-label='Export console logs'
+            >
+              Export Logs
+            </Button>
+            <Button
+              size='xs'
+              variant='ghost'
+              color={theme.colors.fgMuted}
+              _hover={{ bg: theme.colors.bgSubtle }}
+              onClick={onClear}
+              title='Clear console'
+              aria-label='Clear console'
+            >
+              <FiTrash2 size={12} />
+            </Button>
+          </Flex>
+          <Box flex='1' overflowY='auto' overflowX='hidden' wordBreak='break-word' px='2' py='1' fontFamily="'IBM Plex Mono', monospace" fontSize='11px'>
+            {filteredLogs.length === 0 ? (
+              <Text color={theme.colors.fgMuted} fontSize='11px' py='2' px='1'>Waiting for app output stream...</Text>
+            ) : filteredLogs.map(entry => (
+              <Flex
+                key={entry.id}
+                gap='2'
+                py='1px'
+                px='1'
+                borderRadius='sm'
+                bg={levelBg[entry.level] || 'transparent'}
+                align='baseline'
+              >
+                <Text flex='0 0 auto' color={theme.colors.fgMuted} fontSize='10px' style={{ userSelect: 'none' }}>
+                  {new Date(entry.timestamp).toLocaleTimeString()}
+                </Text>
+                <Text flex='0 0 auto' color={levelColor[entry.level] || theme.colors.fgMuted} fontWeight='600' fontSize='10px' minW='36px' style={{ userSelect: 'none' }}>
+                  {String(entry.level || 'info').toUpperCase()}
+                </Text>
+                <Text flex='0 0 auto' color={theme.colors.fgMuted} fontSize='10px' minW='60px' style={{ userSelect: 'none' }}>
+                  [{entry.source}]
+                </Text>
+                <Text color={levelColor[entry.level] || theme.colors.fgDefault} flex='1'>
+                  {entry.message}
+                  {entry.detail ? (
+                    <Text as='span' color={theme.colors.fgMuted}> — {entry.detail}</Text>
+                  ) : null}
+                </Text>
+              </Flex>
+            ))}
+            <Box ref={endRef} />
+          </Box>
+        </Flex>
+      ) : null}
+    </Box>
+  );
+}
+
+ConsoleDrawer.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  logs: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.string,
+    level: PropTypes.string,
+    source: PropTypes.string,
+    message: PropTypes.string,
+    detail: PropTypes.string,
+    timestamp: PropTypes.number,
+  })).isRequired,
+  filter: PropTypes.string.isRequired,
+  autoScroll: PropTypes.bool.isRequired,
+  endRef: PropTypes.shape({ current: PropTypes.any }),
+  theme: PropTypes.shape({
+    colors: PropTypes.shape({
+      fgDefault: PropTypes.string,
+      fgMuted: PropTypes.string,
+      bgElevated: PropTypes.string,
+      borderDefault: PropTypes.string,
+      borderSubtle: PropTypes.string,
+      bgPanel: PropTypes.string,
+      bgSubtle: PropTypes.string,
+    }).isRequired,
+  }).isRequired,
+  onFilterChange: PropTypes.func.isRequired,
+  onAutoScrollToggle: PropTypes.func.isRequired,
+  onClear: PropTypes.func.isRequired,
+  onExport: PropTypes.func.isRequired,
+};
+
+let consoleLogIdCounter = 0;
+
+function createConsoleLogId() {
+  const randomUuid = globalThis.crypto?.randomUUID?.();
+  if (randomUuid) {
+    return randomUuid;
+  }
+
+  consoleLogIdCounter += 1;
+  return `log-${Date.now()}-${consoleLogIdCounter}`;
+}
+
+function useConsoleManager() {
   const [consoleLogs, setConsoleLogs] = React.useState([]);
   const [consoleOpen, setConsoleOpen] = React.useState(false);
   const [consoleAutoScroll, setConsoleAutoScroll] = React.useState(true);
-  const [consoleFilter, setConsoleFilter] = React.useState('all'); // 'all' | 'info' | 'warn' | 'error'
+  const [consoleFilter, setConsoleFilter] = React.useState('all');
   const [unreadErrors, setUnreadErrors] = React.useState(0);
-  const [proxyHeadersText, setProxyHeadersText] = React.useState('');
-  const [proxyToolHeaderEnabled, setProxyToolHeaderEnabled] = React.useState(false);
-  const [proxyToolHeaderName, setProxyToolHeaderName] = React.useState('X-Sentinel-Tool');
-  const [proxyToolHeaderValue, setProxyToolHeaderValue] = React.useState('Gulp-Sentinel');
-  const [proxyStaticIpsText, setProxyStaticIpsText] = React.useState('');
-  const [proxySettingsLoading, setProxySettingsLoading] = React.useState(false);
-  const [proxySettingsSaving, setProxySettingsSaving] = React.useState(false);
   const consoleEndRef = React.useRef(null);
-  const contextToggleButtonRef = React.useRef(null);
-  const contextRailContentRef = React.useRef(null);
-  const quickActionButtonRefs = React.useRef([]);
-  const contextRailScrollTopRef = React.useRef(0);
-  const lastQuickActionIndexRef = React.useRef(-1);
-  const previousContextCollapsedRef = React.useRef(false);
-
-  const versions = (window.electronInfo && window.electronInfo.versions) || {};
-
   const MAX_CONSOLE_ENTRIES = 500;
 
   const pushLog = React.useCallback((level, source, message, detail) => {
+    const detailText = detail === undefined || detail === null ? undefined : String(detail);
     const entry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: createConsoleLogId(),
       level: String(level || 'info'),
       source: String(source || 'app'),
       message: String(message || ''),
-      detail: detail !== undefined && detail !== null ? String(detail) : undefined,
+      detail: detailText,
       timestamp: Date.now(),
     };
     setConsoleLogs(prev => {
@@ -473,7 +689,7 @@ function App() {
   }, []);
 
   const exportConsoleLogs = React.useCallback(async () => {
-    const api = typeof window !== 'undefined' && window.sentinel && window.sentinel.console;
+    const api = globalThis.window?.sentinel?.console;
     if (!api || typeof api.export !== 'function') {
       pushLog('error', 'renderer', 'Console export is unavailable in this build.');
       return;
@@ -481,15 +697,15 @@ function App() {
 
     try {
       const result = await api.export({ entries: consoleLogs });
-      if (result && result.ok && result.filePath) {
+      if (result?.ok && result?.filePath) {
         pushLog('info', 'app', 'Console log export completed.', result.filePath);
         return;
       }
-      if (!result || !result.canceled) {
+      if (!result?.canceled) {
         pushLog('warn', 'app', 'Console log export did not complete.');
       }
     } catch (error) {
-      const message = error && error.message ? error.message : String(error);
+      const message = error?.message ?? String(error);
       if (message.includes("No handler registered for 'console:export'")) {
         const downloaded = downloadConsoleLogs(consoleLogs);
         if (downloaded) {
@@ -501,23 +717,20 @@ function App() {
     }
   }, [consoleLogs, pushLog]);
 
-  // Scroll to the bottom whenever new entries arrive while console is open.
   React.useEffect(() => {
-    if (consoleOpen && consoleAutoScroll && consoleEndRef.current && typeof consoleEndRef.current.scrollIntoView === 'function') {
-      consoleEndRef.current.scrollIntoView({ block: 'end' });
+    if (consoleOpen && consoleAutoScroll) {
+      consoleEndRef.current?.scrollIntoView?.({ block: 'end' });
     }
   }, [consoleLogs, consoleOpen, consoleAutoScroll]);
 
-  // Reset unread badge when drawer is opened.
   React.useEffect(() => {
     if (consoleOpen) {
       setUnreadErrors(0);
     }
   }, [consoleOpen]);
 
-  // Subscribe to main-process console:log push events via preload.
   React.useEffect(() => {
-    const api = typeof window !== 'undefined' && window.sentinel && window.sentinel.console;
+    const api = globalThis.window?.sentinel?.console;
     if (!api || typeof api.onLog !== 'function') {
       return undefined;
     }
@@ -528,10 +741,9 @@ function App() {
     return () => { if (typeof unsub === 'function') unsub(); };
   }, [pushLog]);
 
-  // Capture renderer-side unhandled errors and promise rejections.
   React.useEffect(() => {
     const handleError = (event) => {
-      const msg = event.message || (event.error && event.error.message) || 'Unknown error';
+      const msg = event.message || event.error?.message || 'Unknown error';
       const detail = event.filename ? `${event.filename}:${event.lineno || 0}` : undefined;
       pushLog('error', 'renderer', msg, detail);
     };
@@ -540,13 +752,295 @@ function App() {
       const msg = reason instanceof Error ? reason.message : String(reason || 'Unhandled rejection');
       pushLog('error', 'renderer', msg);
     };
-    window.addEventListener('error', handleError);
-    window.addEventListener('unhandledrejection', handleRejection);
+    globalThis.window.addEventListener('error', handleError);
+    globalThis.window.addEventListener('unhandledrejection', handleRejection);
     return () => {
-      window.removeEventListener('error', handleError);
-      window.removeEventListener('unhandledrejection', handleRejection);
+      globalThis.window.removeEventListener('error', handleError);
+      globalThis.window.removeEventListener('unhandledrejection', handleRejection);
     };
   }, [pushLog]);
+
+  return {
+    consoleLogs,
+    setConsoleLogs,
+    consoleOpen,
+    setConsoleOpen,
+    consoleAutoScroll,
+    setConsoleAutoScroll,
+    consoleFilter,
+    setConsoleFilter,
+    unreadErrors,
+    consoleEndRef,
+    pushLog,
+    exportConsoleLogs,
+  };
+}
+
+function useProxySettings(settingsOpen, pushLog) {
+  const [proxyHeadersText, setProxyHeadersText] = React.useState('');
+  const [proxyToolHeaderEnabled, setProxyToolHeaderEnabled] = React.useState(false);
+  const [proxyToolHeaderName, setProxyToolHeaderName] = React.useState('X-Sentinel-Tool');
+  const [proxyToolHeaderValue, setProxyToolHeaderValue] = React.useState('Gulp-Sentinel');
+  const [proxyStaticIpsText, setProxyStaticIpsText] = React.useState('');
+  const [proxySettingsLoading, setProxySettingsLoading] = React.useState(false);
+  const [proxySettingsSaving, setProxySettingsSaving] = React.useState(false);
+
+  const loadProxyRuntimeSettings = React.useCallback(async () => {
+    const api = globalThis.window?.sentinel?.proxy?.config;
+    if (!api || typeof api.get !== 'function') {
+      return;
+    }
+
+    setProxySettingsLoading(true);
+    try {
+      const config = await api.get();
+      const headersText = Object.entries(config?.customHeaders ?? {})
+        .map(([name, value]) => `${name}: ${value}`)
+        .join('\n');
+      setProxyHeadersText(headersText);
+      setProxyToolHeaderEnabled(Boolean(config?.toolIdentifier?.enabled));
+      setProxyToolHeaderName(String(config?.toolIdentifier?.headerName ?? 'X-Sentinel-Tool'));
+      setProxyToolHeaderValue(String(config?.toolIdentifier?.value ?? 'Gulp-Sentinel'));
+      setProxyStaticIpsText(Array.isArray(config?.staticIpAddresses) ? config.staticIpAddresses.join('\n') : '');
+    } catch (error) {
+      pushLog('error', 'app', 'Failed to load proxy runtime settings.', error?.message ?? String(error));
+    } finally {
+      setProxySettingsLoading(false);
+    }
+  }, [pushLog]);
+
+  const saveProxyRuntimeSettings = React.useCallback(async () => {
+    const api = globalThis.window?.sentinel?.proxy?.config;
+    if (!api || typeof api.set !== 'function') {
+      pushLog('error', 'app', 'Proxy runtime settings are unavailable in this build.');
+      return;
+    }
+
+    setProxySettingsSaving(true);
+    try {
+      const config = {
+        customHeaders: parseHeadersText(proxyHeadersText),
+        toolIdentifier: {
+          enabled: proxyToolHeaderEnabled,
+          headerName: proxyToolHeaderName,
+          value: proxyToolHeaderValue,
+        },
+        staticIpAddresses: parseStaticIpsText(proxyStaticIpsText),
+      };
+      await api.set({ config });
+      pushLog('info', 'app', 'Proxy runtime settings saved from Preferences.');
+    } catch (error) {
+      pushLog('error', 'app', 'Failed to save proxy runtime settings.', error?.message ?? String(error));
+    } finally {
+      setProxySettingsSaving(false);
+    }
+  }, [proxyHeadersText, proxyStaticIpsText, proxyToolHeaderEnabled, proxyToolHeaderName, proxyToolHeaderValue, pushLog]);
+
+  React.useEffect(() => {
+    if (settingsOpen) {
+      loadProxyRuntimeSettings();
+    }
+  }, [settingsOpen, loadProxyRuntimeSettings]);
+
+  return {
+    proxyHeadersText,
+    setProxyHeadersText,
+    proxyToolHeaderEnabled,
+    setProxyToolHeaderEnabled,
+    proxyToolHeaderName,
+    setProxyToolHeaderName,
+    proxyToolHeaderValue,
+    setProxyToolHeaderValue,
+    proxyStaticIpsText,
+    setProxyStaticIpsText,
+    proxySettingsLoading,
+    proxySettingsSaving,
+    saveProxyRuntimeSettings,
+  };
+}
+
+function useWorkspaceShortcuts(addPane, setCommandPaletteOpen, setSettingsOpen, setMemoryUsage) {
+  React.useEffect(() => {
+    const handleKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+      }
+      if (event.key === 'Escape') {
+        setCommandPaletteOpen(false);
+        setSettingsOpen(false);
+      }
+    };
+
+    const handleNavigate = (event) => {
+      const moduleName = event?.detail?.moduleName ?? '';
+      if (moduleName && modules.includes(moduleName)) {
+        addPane(moduleName);
+      }
+    };
+
+    globalThis.window.addEventListener('keydown', handleKeyDown);
+    globalThis.window.addEventListener('sentinel:navigate-module', handleNavigate);
+
+    const timer = globalThis.window.setInterval(() => {
+      setMemoryUsage(formatMemoryUsageMb());
+    }, 2000);
+
+    return () => {
+      globalThis.window.removeEventListener('keydown', handleKeyDown);
+      globalThis.window.removeEventListener('sentinel:navigate-module', handleNavigate);
+      globalThis.window.clearInterval(timer);
+    };
+  }, [addPane, setCommandPaletteOpen, setSettingsOpen, setMemoryUsage]);
+}
+
+function useContextRailBehavior(contextCollapsed, contextRailContentRef, contextToggleButtonRef, quickActionButtonRefs, lastQuickActionIndexRef) {
+  const contextRailScrollTopRef = React.useRef(0);
+  const previousContextCollapsedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const wasCollapsed = previousContextCollapsedRef.current;
+
+    if (contextCollapsed !== wasCollapsed) {
+      if (contextCollapsed) {
+        if (contextRailContentRef.current) {
+          contextRailScrollTopRef.current = contextRailContentRef.current.scrollTop;
+        }
+        const activeElement = globalThis.document?.activeElement ?? null;
+        if (
+          activeElement &&
+          contextRailContentRef.current?.contains(activeElement) &&
+          contextToggleButtonRef.current
+        ) {
+          contextToggleButtonRef.current.focus();
+        }
+      } else {
+        globalThis.window.requestAnimationFrame(() => {
+          if (contextRailContentRef.current) {
+            contextRailContentRef.current.scrollTop = contextRailScrollTopRef.current;
+          }
+          quickActionButtonRefs.current[lastQuickActionIndexRef.current]?.focus();
+        });
+      }
+    }
+
+    previousContextCollapsedRef.current = contextCollapsed;
+  }, [contextCollapsed, contextRailContentRef, contextToggleButtonRef, quickActionButtonRefs, lastQuickActionIndexRef]);
+}
+
+class PanelErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      message: '',
+    };
+  }
+
+  static getDerivedStateFromError(error) {
+    return {
+      hasError: true,
+      message: error?.message || 'Unknown panel render error',
+    };
+  }
+
+  componentDidCatch(error, info) {
+    if (typeof this.props.onError === 'function') {
+      this.props.onError(error, info);
+    }
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, message: '' });
+  };
+
+  render() {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    const panelName = this.props.panelName || 'panel';
+    return (
+      <Flex h='100%' w='100%' align='center' justify='center' p='6'>
+        <VStack maxW='640px' spacing='3' align='stretch' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel' p='4'>
+          <Text fontWeight='semibold'>Unable to render {panelName}</Text>
+          <Text fontSize='sm' color='fg.muted'>The panel hit a runtime error. Use Reload Pane to remount this view.</Text>
+          <Code fontSize='xs' whiteSpace='pre-wrap' color='fg.default' bg='bg.subtle'>{this.state.message}</Code>
+          <HStack justify='flex-end'>
+            <Button size='xs' onClick={this.handleReload}>Reload Pane</Button>
+          </HStack>
+        </VStack>
+      </Flex>
+    );
+  }
+}
+
+PanelErrorBoundary.propTypes = {
+  children: PropTypes.node,
+  panelName: PropTypes.string,
+  onError: PropTypes.func,
+};
+
+// eslint-disable-next-line sonarjs/cognitive-complexity
+function App() {
+  const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
+  const [openPanes, setOpenPanes] = React.useState(['Dashboard', 'Proxy']);
+  const [activePane, setActivePane] = React.useState('Dashboard');
+  const [proxyRunning, setProxyRunning] = React.useState(true);
+  const [panelStatus] = React.useState(defaultPanelStatus);
+  const [contextCollapsed, setContextCollapsed] = React.useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = React.useState(false);
+  const [commandQuery, setCommandQuery] = React.useState('');
+  const [memoryUsage, setMemoryUsage] = React.useState(formatMemoryUsageMb());
+  const [selectedThemeId, setSelectedThemeId] = React.useState(getInitialThemeId);
+  const selectedTheme = THEME_REGISTRY[selectedThemeId] || FALLBACK_THEME;
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const contextToggleButtonRef = React.useRef(null);
+  const contextRailContentRef = React.useRef(null);
+  const quickActionButtonRefs = React.useRef([]);
+  const lastQuickActionIndexRef = React.useRef(null);
+
+  const {
+    consoleLogs,
+    setConsoleLogs,
+    consoleOpen,
+    setConsoleOpen,
+    consoleAutoScroll,
+    setConsoleAutoScroll,
+    consoleFilter,
+    setConsoleFilter,
+    unreadErrors,
+    consoleEndRef,
+    pushLog,
+    exportConsoleLogs,
+  } = useConsoleManager();
+
+  const {
+    proxyHeadersText,
+    setProxyHeadersText,
+    proxyToolHeaderEnabled,
+    setProxyToolHeaderEnabled,
+    proxyToolHeaderName,
+    setProxyToolHeaderName,
+    proxyToolHeaderValue,
+    setProxyToolHeaderValue,
+    proxyStaticIpsText,
+    setProxyStaticIpsText,
+    proxySettingsLoading,
+    proxySettingsSaving,
+    saveProxyRuntimeSettings,
+  } = useProxySettings(settingsOpen, pushLog);
+
+  const versions = globalThis.window?.electronInfo?.versions ?? {};
+  const buildInfoSource = [
+    globalThis.window?.buildInfo,
+    globalThis.window?.electronInfo?.build,
+    generatedBuildInfo,
+  ].find((candidate) => candidate?.version || candidate?.default?.version) ?? {};
+  const buildInfo = buildInfoSource?.default ?? buildInfoSource;
+  const buildVersion = buildInfo?.version && buildInfo?.git?.commitCount
+    ? `${buildInfo.version}+${buildInfo.git.commitCount}`
+    : buildInfo?.version || 'unknown';
 
   const addPane = React.useCallback((moduleName) => {
     setOpenPanes((prev) => {
@@ -575,131 +1069,7 @@ function App() {
     applyThemeToDocument(selectedThemeId);
   }, [selectedThemeId]);
 
-  function parseHeadersText(text) {
-    const map = {};
-    for (const rawLine of String(text || '').split(/\r?\n/g)) {
-      const line = rawLine.trim();
-      if (!line) {
-        continue;
-      }
-      const separator = line.indexOf(':');
-      if (separator <= 0) {
-        continue;
-      }
-      const name = line.slice(0, separator).trim();
-      const value = line.slice(separator + 1).trim();
-      if (!name) {
-        continue;
-      }
-      map[name] = value;
-    }
-    return map;
-  }
-
-  function parseStaticIpsText(text) {
-    const out = [];
-    const seen = new Set();
-    for (const token of String(text || '').split(/\r?\n|,/g)) {
-      const ip = token.trim();
-      if (!ip || seen.has(ip)) {
-        continue;
-      }
-      seen.add(ip);
-      out.push(ip);
-    }
-    return out;
-  }
-
-  const loadProxyRuntimeSettings = React.useCallback(async () => {
-    const api = typeof window !== 'undefined' && window.sentinel && window.sentinel.proxy && window.sentinel.proxy.config;
-    if (!api || typeof api.get !== 'function') {
-      return;
-    }
-
-    setProxySettingsLoading(true);
-    try {
-      const config = await api.get();
-      const headersText = Object.entries(config && config.customHeaders ? config.customHeaders : {})
-        .map(([name, value]) => `${name}: ${value}`)
-        .join('\n');
-      setProxyHeadersText(headersText);
-      setProxyToolHeaderEnabled(Boolean(config && config.toolIdentifier && config.toolIdentifier.enabled));
-      setProxyToolHeaderName(String(config && config.toolIdentifier && config.toolIdentifier.headerName ? config.toolIdentifier.headerName : 'X-Sentinel-Tool'));
-      setProxyToolHeaderValue(String(config && config.toolIdentifier && config.toolIdentifier.value ? config.toolIdentifier.value : 'Gulp-Sentinel'));
-      setProxyStaticIpsText(Array.isArray(config && config.staticIpAddresses) ? config.staticIpAddresses.join('\n') : '');
-    } catch (error) {
-      pushLog('error', 'app', 'Failed to load proxy runtime settings.', error && error.message ? error.message : String(error));
-    } finally {
-      setProxySettingsLoading(false);
-    }
-  }, [pushLog]);
-
-  const saveProxyRuntimeSettings = React.useCallback(async () => {
-    const api = typeof window !== 'undefined' && window.sentinel && window.sentinel.proxy && window.sentinel.proxy.config;
-    if (!api || typeof api.set !== 'function') {
-      pushLog('error', 'app', 'Proxy runtime settings are unavailable in this build.');
-      return;
-    }
-
-    setProxySettingsSaving(true);
-    try {
-      const config = {
-        customHeaders: parseHeadersText(proxyHeadersText),
-        toolIdentifier: {
-          enabled: proxyToolHeaderEnabled,
-          headerName: proxyToolHeaderName,
-          value: proxyToolHeaderValue,
-        },
-        staticIpAddresses: parseStaticIpsText(proxyStaticIpsText),
-      };
-      await api.set({ config });
-      pushLog('info', 'app', 'Proxy runtime settings saved from Preferences.');
-    } catch (error) {
-      pushLog('error', 'app', 'Failed to save proxy runtime settings.', error && error.message ? error.message : String(error));
-    } finally {
-      setProxySettingsSaving(false);
-    }
-  }, [proxyHeadersText, proxyStaticIpsText, proxyToolHeaderEnabled, proxyToolHeaderName, proxyToolHeaderValue, pushLog]);
-
-  React.useEffect(() => {
-    if (!settingsOpen) {
-      return;
-    }
-    loadProxyRuntimeSettings();
-  }, [settingsOpen, loadProxyRuntimeSettings]);
-
-  React.useEffect(() => {
-    const handleKeyDown = (event) => {
-      if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'k') {
-        event.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
-      }
-      if (event.key === 'Escape') {
-        setCommandPaletteOpen(false);
-        setSettingsOpen(false);
-      }
-    };
-
-    const handleNavigate = (event) => {
-      const moduleName = event && event.detail ? event.detail.moduleName : '';
-      if (moduleName && modules.includes(moduleName)) {
-        addPane(moduleName);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('sentinel:navigate-module', handleNavigate);
-
-    const timer = window.setInterval(() => {
-      setMemoryUsage(formatMemoryUsageMb());
-    }, 2000);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('sentinel:navigate-module', handleNavigate);
-      window.clearInterval(timer);
-    };
-  }, [addPane]);
+  useWorkspaceShortcuts(addPane, setCommandPaletteOpen, setSettingsOpen, setMemoryUsage);
 
   const filteredCommands = modules.filter((moduleName) => {
     const query = String(commandQuery || '').trim().toLowerCase();
@@ -744,13 +1114,9 @@ function App() {
 
   const focusQuickAction = React.useCallback((index) => {
     const total = contextQuickActions.length;
-    if (!total) {
-      return;
-    }
-    const wrapped = (index + total) % total;
-    const target = quickActionButtonRefs.current[wrapped];
-    if (target && typeof target.focus === 'function') {
-      target.focus();
+    if (total) {
+      const wrapped = (index + total) % total;
+      quickActionButtonRefs.current[wrapped]?.focus();
     }
   }, [contextQuickActions.length]);
 
@@ -776,45 +1142,18 @@ function App() {
     }
   }, [contextQuickActions.length, focusQuickAction]);
 
-  React.useEffect(() => {
-    const wasCollapsed = previousContextCollapsedRef.current;
-
-    if (!wasCollapsed && contextCollapsed) {
-      if (contextRailContentRef.current) {
-        contextRailScrollTopRef.current = contextRailContentRef.current.scrollTop;
-      }
-      const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
-      if (
-        activeElement &&
-        contextRailContentRef.current &&
-        contextRailContentRef.current.contains(activeElement) &&
-        contextToggleButtonRef.current
-      ) {
-        contextToggleButtonRef.current.focus();
-      }
-    }
-
-    if (wasCollapsed && !contextCollapsed) {
-      if (typeof window !== 'undefined') {
-        window.requestAnimationFrame(() => {
-          if (contextRailContentRef.current) {
-            contextRailContentRef.current.scrollTop = contextRailScrollTopRef.current;
-          }
-          const index = lastQuickActionIndexRef.current;
-          if (index >= 0 && quickActionButtonRefs.current[index]) {
-            quickActionButtonRefs.current[index].focus();
-          }
-        });
-      }
-    }
-
-    previousContextCollapsedRef.current = contextCollapsed;
-  }, [contextCollapsed]);
+  useContextRailBehavior(
+    contextCollapsed,
+    contextRailContentRef,
+    contextToggleButtonRef,
+    quickActionButtonRefs,
+    lastQuickActionIndexRef
+  );
 
   const ActivePanel = modulePanels[activePane] || DashboardShell;
   const activeTheme = selectedTheme;
   const shellCodeProps = {
-    bg: 'bg.subtle',
+    bg: 'bg.surface',
     color: 'fg.default',
     borderWidth: '1px',
     borderColor: 'border.default',
@@ -824,6 +1163,9 @@ function App() {
     fontSize: 'xs',
     fontFamily: 'mono'
   };
+  const settingsOverlayScrim = getOverlayScrim(selectedThemeId);
+
+  const commandPaletteOverlayScrim = getOverlayScrim(selectedThemeId);
 
   return (
     <Flex h='100vh' overflow='hidden' bg='bg.canvas' color='fg.default' direction='row' fontFamily='body'>
@@ -845,6 +1187,8 @@ function App() {
         <Button
           size='sm'
           variant='ghost'
+          color='fg.muted'
+          _hover={{ bg: 'bg.surface', color: 'fg.default' }}
           mx={sidebarExpanded ? '2' : '0'}
           minW='0'
           h='40px'
@@ -861,11 +1205,16 @@ function App() {
         {modules.map((moduleName) => {
           const IconComp = moduleIcons[moduleName] || FiPackage;
           const isActive = activePane === moduleName;
+          const proxyStatusBg = proxyRunning ? 'green.400' : 'orange.400';
           return (
             <Box key={moduleName} position='relative' mx={sidebarExpanded ? '2' : '0'}>
               <Button
                 size='sm'
-                variant={isActive ? 'solid' : 'ghost'}
+                variant='ghost'
+                color={isActive ? 'fg.default' : 'fg.muted'}
+                bg={isActive ? 'bg.subtle' : 'transparent'}
+                _hover={{ bg: 'bg.surface', color: 'fg.default' }}
+                opacity={isActive ? 1 : 0.88}
                 w={sidebarExpanded ? '100%' : '44px'}
                 h='44px'
                 px={sidebarExpanded ? '3' : '0'}
@@ -889,7 +1238,7 @@ function App() {
                   w='7px'
                   h='7px'
                   borderRadius='full'
-                  bg={proxyRunning ? 'green.400' : 'orange.400'}
+                  bg={proxyStatusBg}
                   pointerEvents='none'
                 />
               ) : null}
@@ -907,17 +1256,26 @@ function App() {
               <Text fontSize='sm' color='fg.muted' fontFamily='body'>Workbench shell for concurrent security workflows.</Text>
             </Box>
             <HStack gap='3' wrap='wrap' justify='flex-end'>
-              <Badge colorPalette={proxyRunning ? 'green' : 'orange'}>
-                Proxy {proxyRunning ? 'running' : 'paused'}
+              <Badge
+                as='div'
+                variant='outline' 
+                color='fg.default'
+                borderColor='border.default'
+                bg='bg.surface'
+              >
+                <HStack gap='1'>
+                  <Box w='6px' h='6px' borderRadius='full' bg={proxyRunning ? 'green.400' : 'orange.400'} />
+                  <Text fontSize='xs'>Proxy {proxyRunning ? 'running' : 'paused'}</Text>
+                </HStack>
               </Badge>
-              <Button size='xs' variant='outline' onClick={() => setSettingsOpen(true)}>
+              <Button size='xs' variant='outline' color='fg.default' bg='bg.surface' borderColor='border.default' _hover={{ bg: 'bg.subtle' }} onClick={() => setSettingsOpen(true)}>
                 <HStack gap='1'>
                   <FiSettings size={12} />
                   <Text fontSize='xs'>Settings</Text>
                 </HStack>
               </Button>
-              <Text fontSize='xs' color='fg.muted' fontFamily='body'>Project <Code {...shellCodeProps}>sentinel-dev</Code></Text>
-              <Text fontSize='xs' color='fg.muted' fontFamily='body'>Electron <Code {...shellCodeProps}>{versions.electron || 'unknown'}</Code></Text>
+              <Text fontSize='xs' color='fg.default' fontFamily='body'>Project <Code {...shellCodeProps}>sentinel-dev</Code></Text>
+              <Text fontSize='xs' color='fg.default' fontFamily='body'>Electron <Code {...shellCodeProps}>{versions.electron || 'unknown'}</Code></Text>
               <Button size='xs' variant='outline' onClick={() => setProxyRunning((prev) => !prev)}>
                 {proxyRunning ? 'Pause' : 'Resume'}
               </Button>
@@ -936,6 +1294,10 @@ function App() {
                   <Button
                     size='sm'
                     variant={activePane === pane ? 'solid' : 'outline'}
+                    color={activePane === pane ? 'fg.default' : 'fg.muted'}
+                    bg={activePane === pane ? 'bg.subtle' : 'transparent'}
+                    borderColor={activePane === pane ? 'transparent' : 'border.default'}
+                    _hover={{ bg: 'bg.surface', color: 'fg.default' }}
                     onClick={() => setActivePane(pane)}
                   >
                     {pane}
@@ -955,7 +1317,16 @@ function App() {
 
           <Flex flex='1' overflow='hidden' p='3' gap='3'>
             <Box flex='1' minW='0' h='100%' borderWidth='1px' borderColor='border.subtle' borderRadius='sm' bg='bg.surface' overflow='hidden'>
-              <ActivePanel themeId={selectedThemeId} />
+              <PanelErrorBoundary
+                key={activePane}
+                panelName={activePane}
+                onError={(error, info) => {
+                  const detail = [error?.stack, info?.componentStack].filter(Boolean).join('\n');
+                  pushLog('error', 'renderer', `Module pane crashed: ${activePane}`, detail || error?.message || 'Unknown panel error');
+                }}
+              >
+                <ActivePanel themeId={selectedThemeId} />
+              </PanelErrorBoundary>
             </Box>
 
             <Box
@@ -973,16 +1344,16 @@ function App() {
             >
               <VStack ref={contextRailContentRef} w='320px' minW='320px' align='stretch' gap='3' overflowY='auto' overflowX='hidden' p='3'>
                 <Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel'>
-                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading'>Active Context</Text>
-                  <Text fontSize='sm' mb='2' fontFamily='body'>Pane <Code {...shellCodeProps}>{activePane}</Code></Text>
+                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading' color='fg.default'>Active Context</Text>
+                  <Text fontSize='sm' mb='2' fontFamily='body' color='fg.muted'>Pane <Code {...shellCodeProps}>{activePane}</Code></Text>
                   {(panelStatusFields[activePane] || []).map((field) => (
                     <Text key={field.key} fontSize='sm' fontFamily='body' color='fg.muted'>
-                      {field.label}: <Code {...shellCodeProps}>{String((panelStatus[activePane] || {})[field.key] ?? '\u2014')}</Code>
+                      {field.label}: <Code {...shellCodeProps}>{String(panelStatus[activePane]?.[field.key] ?? '\u2014')}</Code>
                     </Text>
                   ))}
                 </Box>
                 <Box p='4' borderWidth='1px' borderColor='border.default' borderRadius='sm' bg='bg.panel'>
-                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading'>Quick Actions</Text>
+                  <Text fontWeight='semibold' mb='2' fontSize='sm' fontFamily='heading' color='fg.default'>Quick Actions</Text>
                   <Stack gap='2'>
                     {contextQuickActions.map((action, index) => (
                       <Button
@@ -993,6 +1364,9 @@ function App() {
                         size='sm'
                         justifyContent='flex-start'
                         variant='outline'
+                        color='fg.default'
+                        bg='bg.surface'
+                        _hover={{ bg: 'bg.subtle' }}
                         onClick={action.run}
                         onFocus={() => {
                           lastQuickActionIndexRef.current = index;
@@ -1012,146 +1386,18 @@ function App() {
           </Flex>
 
           {/* Console Drawer */}
-          {(() => {
-            const levelColor = { info: selectedTheme.colors.fgDefault, warn: '#d97706', error: '#dc2626' };
-            const levelBg = { info: 'transparent', warn: 'rgba(217,119,6,0.08)', error: 'rgba(220,38,38,0.08)' };
-            const filteredLogs = consoleFilter === 'all' ? consoleLogs : consoleLogs.filter(e => e.level === consoleFilter);
-            return (
-              <Box
-                borderTopWidth='1px'
-                borderColor={selectedTheme.colors.borderDefault}
-                bg={selectedTheme.colors.bgElevated}
-                style={{ transition: 'height 0.2s ease' }}
-                h={consoleOpen ? '200px' : '0px'}
-                overflow='hidden'
-                display='flex'
-                flexDirection='column'
-              >
-                {consoleOpen ? (
-                  <Flex direction='column' h='100%'>
-                    <Flex
-                      px='3'
-                      py='1'
-                      borderBottomWidth='1px'
-                      borderColor={selectedTheme.colors.borderSubtle}
-                      align='center'
-                      gap='2'
-                      flex='0 0 auto'
-                      bg={selectedTheme.colors.bgPanel}
-                    >
-                      <HStack gap='1' flex='0 0 auto'>
-                        <Box w='6px' h='6px' borderRadius='full' bg='green.400' />
-                        <Text fontSize='xs' color={selectedTheme.colors.fgMuted}>Live Output</Text>
-                      </HStack>
-                      <HStack gap='1' flex='1'>
-                        {['all', 'info', 'warn', 'error'].map(lvl => (
-                          <Button
-                            key={lvl}
-                            size='xs'
-                            variant={consoleFilter === lvl ? 'solid' : 'ghost'}
-                            color={consoleFilter === lvl ? 'white' : selectedTheme.colors.fgMuted}
-                            bg={consoleFilter === lvl ? (lvl === 'error' ? '#991b1b' : lvl === 'warn' ? '#92400e' : 'brand.600') : 'transparent'}
-                            _hover={{ bg: selectedTheme.colors.bgSubtle }}
-                            onClick={() => setConsoleFilter(lvl)}
-                          >
-                            {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-                            {lvl !== 'all' ? (
-                              <Badge ml='1' colorPalette={lvl === 'error' ? 'red' : lvl === 'warn' ? 'orange' : 'blue'} size='xs'>
-                                {consoleLogs.filter(e => e.level === lvl).length}
-                              </Badge>
-                            ) : null}
-                          </Button>
-                        ))}
-                      </HStack>
-                      <Button
-                        size='xs'
-                        variant='ghost'
-                        color={consoleAutoScroll ? selectedTheme.colors.fgDefault : selectedTheme.colors.fgMuted}
-                        _hover={{ bg: selectedTheme.colors.bgSubtle }}
-                        onClick={() => setConsoleAutoScroll(prev => !prev)}
-                        title={consoleAutoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
-                        aria-label={consoleAutoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
-                      >
-                        {consoleAutoScroll ? 'Pause Auto-Scroll' : 'Resume Auto-Scroll'}
-                      </Button>
-                      <Button
-                        size='xs'
-                        variant='ghost'
-                        color={selectedTheme.colors.fgMuted}
-                        _hover={{ bg: selectedTheme.colors.bgSubtle }}
-                        onClick={exportConsoleLogs}
-                        title='Export console logs'
-                        aria-label='Export console logs'
-                      >
-                        Export Logs
-                      </Button>
-                      <Button
-                        size='xs'
-                        variant='ghost'
-                        color={selectedTheme.colors.fgMuted}
-                        _hover={{ bg: selectedTheme.colors.bgSubtle }}
-                        onClick={() => setConsoleLogs([])}
-                        title='Clear console'
-                        aria-label='Clear console'
-                      >
-                        <FiTrash2 size={12} />
-                      </Button>
-                    </Flex>
-                    <Box flex='1' overflowY='auto' overflowX='hidden' wordBreak='break-word' px='2' py='1' fontFamily="'IBM Plex Mono', monospace" fontSize='11px'>
-                      {filteredLogs.length === 0 ? (
-                        <Text color={selectedTheme.colors.fgMuted} fontSize='11px' py='2' px='1'>Waiting for app output stream...</Text>
-                      ) : filteredLogs.map(entry => (
-                        <Flex
-                          key={entry.id}
-                          gap='2'
-                          py='1px'
-                          px='1'
-                          borderRadius='sm'
-                          bg={levelBg[entry.level] || 'transparent'}
-                          align='baseline'
-                        >
-                          <Text
-                            flex='0 0 auto'
-                            color={selectedTheme.colors.fgMuted}
-                            fontSize='10px'
-                            style={{ userSelect: 'none' }}
-                          >
-                            {new Date(entry.timestamp).toLocaleTimeString()}
-                          </Text>
-                          <Text
-                            flex='0 0 auto'
-                            color={levelColor[entry.level] || selectedTheme.colors.fgMuted}
-                            fontWeight='600'
-                            fontSize='10px'
-                            minW='36px'
-                            style={{ userSelect: 'none' }}
-                          >
-                            {String(entry.level || 'info').toUpperCase()}
-                          </Text>
-                          <Text
-                            flex='0 0 auto'
-                            color={selectedTheme.colors.fgMuted}
-                            fontSize='10px'
-                            minW='60px'
-                            style={{ userSelect: 'none' }}
-                          >
-                            [{entry.source}]
-                          </Text>
-                          <Text color={levelColor[entry.level] || selectedTheme.colors.fgDefault} flex='1'>
-                            {entry.message}
-                            {entry.detail ? (
-                              <Text as='span' color={selectedTheme.colors.fgMuted}> — {entry.detail}</Text>
-                            ) : null}
-                          </Text>
-                        </Flex>
-                      ))}
-                      <Box ref={consoleEndRef} />
-                    </Box>
-                  </Flex>
-                ) : null}
-              </Box>
-            );
-          })()}
+          <ConsoleDrawer
+            isOpen={consoleOpen}
+            logs={consoleLogs}
+            filter={consoleFilter}
+            autoScroll={consoleAutoScroll}
+            endRef={consoleEndRef}
+            theme={selectedTheme}
+            onFilterChange={setConsoleFilter}
+            onAutoScrollToggle={() => setConsoleAutoScroll(prev => !prev)}
+            onClear={() => setConsoleLogs([])}
+            onExport={exportConsoleLogs}
+          />
 
           <Flex px='3' py='2' borderTopWidth='1px' borderColor='border.default' bg='bg.elevated' justify='space-between' align='center' fontSize='xs' fontFamily='body'>
             <HStack gap='3'>
@@ -1179,7 +1425,7 @@ function App() {
               </Button>
               <Text>Memory <Code {...shellCodeProps}>{memoryUsage}</Code></Text>
               <Text>Node <Code {...shellCodeProps}>{versions.node || 'unknown'}</Code></Text>
-              <Text>Electron <Code {...shellCodeProps}>{versions.electron || 'unknown'}</Code></Text>
+              <Text>Build <Code {...shellCodeProps}>{buildVersion}</Code></Text>
             </HStack>
           </Flex>
         </Flex>
@@ -1189,7 +1435,7 @@ function App() {
         <Flex
           position='fixed'
           inset='0'
-          bg={activeTheme.mode === 'dark' ? 'rgba(5, 10, 16, 0.68)' : 'rgba(20, 28, 36, 0.20)'}
+          bg={settingsOverlayScrim}
           justify='flex-end'
           zIndex='1050'
           role='presentation'
@@ -1250,7 +1496,7 @@ function App() {
                           >
                             <Box textAlign='left'>
                               <Text fontSize='sm' fontWeight='semibold'>{theme.label}</Text>
-                              <Text fontSize='xs' color={selectedThemeId === themeId ? 'whiteAlpha.800' : 'fg.muted'}>
+                              <Text fontSize='xs' color={selectedThemeId === themeId ? 'fg.default' : 'fg.muted'}>
                                 {theme.description}
                               </Text>
                             </Box>
@@ -1288,6 +1534,10 @@ function App() {
                   placeholder={'X-Customer-ID: acme\nX-Environment: production'}
                   fontFamily='mono'
                   disabled={proxySettingsLoading || proxySettingsSaving}
+                  color='fg.default'
+                  bg='bg.surface'
+                  borderColor='border.default'
+                  _placeholder={{ color: 'fg.muted' }}
                 />
 
                 <HStack align='center' gap='2' wrap='wrap'>
@@ -1307,6 +1557,10 @@ function App() {
                     maxW='170px'
                     fontFamily='mono'
                     disabled={proxySettingsLoading || proxySettingsSaving}
+                    color='fg.default'
+                    bg='bg.surface'
+                    borderColor='border.default'
+                    _placeholder={{ color: 'fg.muted' }}
                   />
                   <Input
                     size='sm'
@@ -1316,6 +1570,10 @@ function App() {
                     maxW='170px'
                     fontFamily='mono'
                     disabled={proxySettingsLoading || proxySettingsSaving}
+                    color='fg.default'
+                    bg='bg.surface'
+                    borderColor='border.default'
+                    _placeholder={{ color: 'fg.muted' }}
                   />
                 </HStack>
 
@@ -1328,6 +1586,10 @@ function App() {
                   placeholder={'192.0.2.10\n192.0.2.11'}
                   fontFamily='mono'
                   disabled={proxySettingsLoading || proxySettingsSaving}
+                  color='fg.default'
+                  bg='bg.surface'
+                  borderColor='border.default'
+                  _placeholder={{ color: 'fg.muted' }}
                 />
               </VStack>
             </Box>
@@ -1336,7 +1598,16 @@ function App() {
       ) : null}
 
       {commandPaletteOpen ? (
-        <Flex position='fixed' inset='0' bg={activeTheme.mode === 'dark' ? 'rgba(5, 10, 16, 0.65)' : 'rgba(20, 28, 36, 0.18)'} align='flex-start' justify='center' pt='16' zIndex='1000' role='presentation'>
+        <Flex
+          position='fixed'
+          inset='0'
+          bg={commandPaletteOverlayScrim}
+          align='flex-start'
+          justify='center'
+          pt='16'
+          zIndex='1000'
+          role='presentation'
+        >
           <Box
             w='560px'
             maxW='calc(100vw - 32px)'
@@ -1356,6 +1627,10 @@ function App() {
               value={commandQuery}
               onChange={(event) => setCommandQuery(event.target.value)}
               mb='3'
+              color='fg.default'
+              bg='bg.surface'
+              borderColor='border.default'
+              _placeholder={{ color: 'fg.muted' }}
             />
             <Stack gap='2' maxH='320px' overflowY='auto'>
               {filteredCommands.map((moduleName) => (
@@ -1386,4 +1661,4 @@ function App() {
   );
 }
 
-module.exports = App;
+export default App;

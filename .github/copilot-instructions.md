@@ -1,10 +1,11 @@
-# Copilot Instructions for Gulp (Electron + Gulp + React + Chakra UI)
+# Copilot Instructions for Gulp (Electron + Vite + React + Chakra UI)
 
 ## Bootstrap Requirements (Run First)
 - Before handling a request, verify these files exist:
   - `.github/instructions/preferences.instructions.md`
   - `.github/instructions/edge-cases.instructions.md`
   - `.github/instructions/context-management.instructions.md`
+  - `.github/instructions/secure-code.instructions.md`
   - `.github/instructions/_template.instructions.md`
   - `.vscode/settings.json`
 - If any are missing:
@@ -21,8 +22,9 @@
 
 ## Registry
 - `electron` -> `.github/instructions/electron.instructions.md` (active)
-- `gulp` -> `.github/instructions/gulp.instructions.md` (active)
+- `vite` -> `.github/instructions/vite.instructions.md` (active)
 - `react` -> `.github/instructions/react.instructions.md` (active)
+- `secure-code` -> `.github/instructions/secure-code.instructions.md` (active)
 
 ## Append-Only Knowledge Updates
 - Keep these instruction logs append-only.
@@ -40,18 +42,18 @@
 - Recommend unit/integration tests for behavior changes.
 
 ## Project Scope
-- Desktop app built with Electron, React renderer components, Chakra UI, and a Gulp-based asset pipeline.
+- Desktop app built with Electron, React renderer components, Chakra UI, and a Vite-based asset pipeline.
 - Runtime entry point is `dist/main/index.js` (from `package.json -> main`).
 - Source code lives in `src/`; `dist/` is generated output.
 
 ## Source of Truth
-- Always edit files under `src/` and `gulpfile.js`.
+- Always edit source files under `src/` and supporting build/runtime config files (for example `vite.config.js` and scripts under `scripts/`).
 - Never hand-edit `dist/` files except for temporary debugging.
 - If a change is made in `src/`, mirror it by running the build/watch pipeline before validating runtime behavior.
 
 ## Build and Run Workflow
-- Build once: `npx gulp build` (or `npm run dev` only for watch mode).
-- Watch mode: `npm run dev` (runs `gulp watch`).
+- Build once: `npm run build`.
+- Watch/dev mode: `npm run dev`.
 - Start app: `npm run start`.
 - If UI changes are not visible, verify the corresponding file exists under `dist/renderer/`.
 
@@ -60,7 +62,7 @@
 - Keep `src/main/` for Electron main/preload code and `src/renderer/` for browser UI code.
 - Keep React renderer entry in `src/renderer/js/main.jsx` and components in `src/renderer/js/components/`.
 - Wrap renderer root with `ChakraProvider` and prefer Chakra primitives in component UI.
-- Prefer small, named functions for Gulp tasks and Electron lifecycle setup.
+- Prefer small, named functions for build/runtime setup and Electron lifecycle wiring.
 - Keep semicolon usage and single-quote string style consistent with existing files.
 
 ## Electron Safety Rules
@@ -73,18 +75,15 @@
   - `sandbox: true` when feasible
 - Use `path.join(__dirname, ...)` for file paths from main process code.
 
-## Gulp Rules
-- Keep paths centralized in the `paths` object.
-- Use JSX-capable bundling for renderer code (React entry + component imports).
-- When adding new asset types, add both build and watch entries.
-- Keep task composition explicit:
-  - `gulp.parallel(...)` for independent tasks
-  - `gulp.series(...)` for ordered steps
-- Avoid introducing minification/transforms that break renderer compatibility without verification.
+## Vite Rules
+- Keep bundling behavior centralized in `vite.config.js`.
+- Keep renderer entry at `src/renderer/js/main.jsx` and main/preload entries at `src/main/index.js` and `src/main/preload.js`.
+- When adding static assets/docs to build output, use `vite-plugin-static-copy` targets.
+- Validate both `npm run build` and `npm run dev` after configuration changes.
 
 ## Change Checklist for Copilot
 - Did you edit `src/` instead of `dist/`?
-- Did you run/update the relevant Gulp task(s)?
+- Did you run/update the relevant Vite build/dev command(s)?
 - If preload or main changed, did you verify Electron startup still works?
 - If renderer changed, did you keep Node.js access out of renderer scripts?
 - If adding dependencies, are they in the correct section (`dependencies` vs `devDependencies`)?
@@ -120,3 +119,14 @@
 - Never remove or rename existing preload-exposed IPC channels without a coordinated update to both main and renderer.
 - Adding new IPC channels is a backwards-compatible change.
 - `git.commitCount` in `src/contracts/build-info.json` is the monotonically increasing build iteration number.
+
+## Append-Only Directive Update (2026-04-12): Node Built-In Import Specifiers
+- In Node.js/CommonJS files, prefer `node:`-prefixed built-in module specifiers for clarity and supply-chain safety (`require('node:fs')`, `require('node:path')`, `require('node:child_process')`).
+- Avoid bare built-in specifiers (`'fs'`, `'path'`, `'child_process'`) in new or modified code unless compatibility constraints are documented in the change.
+
+## Append-Only Directive Update (2026-04-12): TypeScript Module Resolution Deprecation
+- For repository-owned TypeScript configs, do not introduce `"moduleResolution": "node"` (TypeScript legacy `node10` behavior). Prefer modern values such as `"bundler"`, `"node16"`, or `"nodenext"` based on runtime and tooling.
+- When a third-party dependency ships a deprecated `moduleResolution` value and immediate migration is out of scope, use `"ignoreDeprecations": "6.0"` as a temporary compatibility guard and track removal during dependency updates.
+
+## Append-Only Directive Update (2026-04-13): Code Duplication Quality Gate
+- **Code Duplication Target: < 3%** — All source code in `src/` must maintain less than 3% code duplication as a merge-blocking quality criterion. Comprehensive baseline audit was performed on 2026-04-13, identifying 4.2% duplication with documented consolidation roadmap in `instructions/CODE_DUPLICATION_AUDIT.md`. New code submissions must not increase duplication beyond current baseline; refactoring PRs targeting the < 3% target are prioritized. Before adding utilities, helpers, or constants, verify single source of truth in `src/main/proxy/http-utils.js` (shared primitives), `src/main/proxy/protocol-support.js` (config logic), and existing modules. Code review pre-merge checks: (1) Does this function/constant already exist elsewhere? (2) Can it be centralized? (3) Is duplication documented as intentional with clear rationale?

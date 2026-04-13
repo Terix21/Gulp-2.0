@@ -8,10 +8,7 @@ SEN-014 Intercept engine
 'use strict';
 
 const { EventEmitter } = require('node:events');
-
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
+const { clone } = require('./http-utils');
 
 function mergeRequestEdits(baseRequest, editedRequest = {}) {
   const next = clone(baseRequest || {});
@@ -86,11 +83,11 @@ class InterceptEngine extends EventEmitter {
 
   async captureRequest(request, forwarder, options = {}) {
     if (typeof forwarder !== 'function') {
-      throw new Error('captureRequest requires a forwarder(request) function');
+      throw new TypeError('captureRequest requires a forwarder(request) function');
     }
 
     const queuedRequest = clone(request || {});
-    const bypassQueue = !!(options && options.bypassQueue);
+    const bypassQueue = !!options?.bypassQueue;
 
     if (bypassQueue || (!this.interceptEnabled && !this.globalPaused)) {
       const finalRequest = this.applyRules(queuedRequest);
@@ -151,7 +148,7 @@ class InterceptEngine extends EventEmitter {
       this.emit('forward-error', {
         requestId,
         request: clone(finalRequest),
-        error: error && error.message ? error.message : 'Forward failed',
+        error: error?.message || 'Forward failed',
       });
       this.emit('queue', this.getQueue());
       throw error;

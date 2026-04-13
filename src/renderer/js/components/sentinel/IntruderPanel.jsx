@@ -1,5 +1,6 @@
-const React = require('react');
-const {
+import React from 'react';
+import PropTypes from 'prop-types';
+import {
   Badge,
   Box,
   Button,
@@ -10,8 +11,8 @@ const {
   Text,
   Textarea,
   VStack,
-} = require('@chakra-ui/react');
-const { getStatusTextColor } = require('./theme-utils');
+} from '@chakra-ui/react';
+import { getStatusTextColor } from './theme-utils';
 
 const MARKER_REGEX = /§([^§]*)§/g;
 
@@ -91,7 +92,7 @@ function estimateSourceCount(source) {
 
   if (source.type === 'dictionary') {
     if (source.filePath) {
-      return 'file';
+      return null;
     }
     return String(source.text || '')
       .split(/\r?\n/g)
@@ -127,7 +128,7 @@ function estimateSourceCount(source) {
 function estimateAttackTotal(attackType, sources) {
   const counts = sources
     .map(source => estimateSourceCount(source))
-    .filter(count => typeof count === 'number');
+    .filter(count => count !== null && Number.isFinite(count));
   if (counts.length === 0) {
     return 'unknown';
   }
@@ -162,16 +163,100 @@ function insertMarker(ref, value, setValue, fallbackLabel) {
 function sortResults(results, sortBy, sortDirection) {
   const sorted = [...results];
   sorted.sort((left, right) => {
-    const leftValue = left && left[sortBy] != null ? left[sortBy] : 0;
-    const rightValue = right && right[sortBy] != null ? right[sortBy] : 0;
+    const leftCandidate = left?.[sortBy];
+    const rightCandidate = right?.[sortBy];
+    const leftValue = leftCandidate == null ? 0 : leftCandidate;
+    const rightValue = rightCandidate == null ? 0 : rightCandidate;
     if (leftValue === rightValue) {
       return 0;
     }
-    return sortDirection === 'asc'
-      ? (leftValue > rightValue ? 1 : -1)
-      : (leftValue < rightValue ? 1 : -1);
+    if (sortDirection === 'asc') {
+      return leftValue > rightValue ? 1 : -1;
+    }
+    return leftValue < rightValue ? 1 : -1;
   });
   return sorted;
+}
+
+function buildAttackFromProgress(payload, context) {
+  return {
+    id: payload.attackId,
+    status: payload.status || 'running',
+    attackType: context.attackType,
+    positionCount: context.markersLength,
+    requestSummary: `${context.method} ${context.url}`,
+    sent: payload.sent,
+    total: payload.total,
+    anomalousCount: payload.lastResult?.isAnomalous ? 1 : 0,
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+function updateAttacksWithProgress(previousAttacks, payload, context) {
+  const next = previousAttacks.map(item => {
+    if (item.id !== payload.attackId) {
+      return item;
+    }
+    return {
+      ...item,
+      sent: payload.sent,
+      total: payload.total,
+      status: payload.status || (payload.sent >= payload.total ? 'completed' : item.status),
+      updatedAt: Date.now(),
+      anomalousCount: item.anomalousCount + (payload.lastResult?.isAnomalous ? 1 : 0),
+    };
+  });
+
+  const exists = next.some(item => item.id === payload.attackId);
+  if (exists) {
+    return next;
+  }
+  return [buildAttackFromProgress(payload, context), ...next];
+}
+
+function appendLastResultIfMissing(previousResults, lastResult) {
+  const normalized = normalizeIntruderResult(lastResult);
+  if (!normalized) {
+    return previousResults;
+  }
+  const exists = previousResults.some(item => item.id === normalized.id);
+  if (exists) {
+    return previousResults;
+  }
+  return [...previousResults, normalized];
+}
+
+function normalizeIntruderResult(result) {
+  if (!result || typeof result !== 'object') {
+    return null;
+  }
+
+  const anomalyReasons = Array.isArray(result.anomalyReasons)
+    ? result.anomalyReasons.map(reason => String(reason || '')).filter(Boolean)
+    : [];
+
+  const id = result.id ? String(result.id) : `result-${result.attackId || 'unknown'}-${result.position || 0}-${result.payload || ''}`;
+  return {
+    ...result,
+    id,
+    payload: result.payload == null ? '' : String(result.payload),
+    statusCode: Number.isFinite(Number(result.statusCode)) ? Number(result.statusCode) : 0,
+    length: Number.isFinite(Number(result.length)) ? Number(result.length) : 0,
+    duration: Number.isFinite(Number(result.duration)) ? Number(result.duration) : 0,
+    isAnomalous: Boolean(result.isAnomalous),
+    anomalyReasons,
+  };
+}
+
+function getProgressBadgeStyle(status) {
+  if (status === 'completed') {
+    return { borderColor: 'green.500', bg: 'rgba(34,197,94,0.1)' };
+  }
+  if (status === 'stopped') {
+    return { borderColor: 'orange.500', bg: 'rgba(249,115,22,0.1)' };
+  }
+  return { borderColor: 'blue.500', bg: 'rgba(59,130,246,0.1)' };
 }
 
 function filterResults(results, filters) {
@@ -193,7 +278,7 @@ function filterResults(results, filters) {
 }
 
 function IntruderPanel({ themeId }) {
-  const sentinel = typeof window !== 'undefined' ? window.sentinel : null;
+  const sentinel = globalThis?.window?.sentinel || null;
   const urlRef = React.useRef(null);
   const headersRef = React.useRef(null);
   const bodyRef = React.useRef(null);
@@ -227,12 +312,12 @@ function IntruderPanel({ themeId }) {
   React.useEffect(() => {
     setPositionSources(prev => markers.map((marker, index) => ({
       marker,
-      source: prev[index] && prev[index].source ? prev[index].source : buildDefaultSource(marker),
+      source: prev[index]?.source || buildDefaultSource(marker),
     })));
   }, [url, headersText, body]);
 
   const loadAttacks = React.useCallback(async () => {
-    if (!sentinel || !sentinel.intruder || !sentinel.intruder.list) {
+    if (typeof sentinel?.intruder?.list !== 'function') {
       return;
     }
     const result = await sentinel.intruder.list();
@@ -244,7 +329,7 @@ function IntruderPanel({ themeId }) {
   }, [sentinel, selectedAttackId]);
 
   const loadResults = React.useCallback(async (attackId) => {
-    if (!sentinel || !sentinel.intruder || !attackId) {
+    if (!attackId || !sentinel?.intruder) {
       return;
     }
     setLoadingResults(true);
@@ -252,7 +337,9 @@ function IntruderPanel({ themeId }) {
     try {
       const result = await sentinel.intruder.results({ attackId, page: 0, pageSize: 500 });
       setResults(prev => {
-        const fetched = Array.isArray(result.results) ? result.results : [];
+        const fetched = Array.isArray(result.results)
+          ? result.results.map(item => normalizeIntruderResult(item)).filter(Boolean)
+          : [];
         if (fetched.length === 0) {
           return prev;
         }
@@ -276,56 +363,32 @@ function IntruderPanel({ themeId }) {
   }, [attacks, sentinel]);
 
   React.useEffect(() => {
-    if (!sentinel || !sentinel.intruder) {
+    if (!sentinel?.intruder) {
       return undefined;
     }
 
     loadAttacks().catch(() => {});
+    const progressContext = {
+      attackType,
+      markersLength: markers.length,
+      method,
+      url,
+    };
+
+    if (typeof sentinel.intruder.onProgress !== 'function') {
+      return undefined;
+    }
+
     const unsubscribe = sentinel.intruder.onProgress((payload) => {
-      if (!payload || !payload.attackId) {
+      if (!payload?.attackId) {
         return;
       }
 
-      setAttacks(prev => {
-        const next = prev.map(item => item.id === payload.attackId
-          ? {
-            ...item,
-            sent: payload.sent,
-            total: payload.total,
-            status: payload.status || (payload.sent >= payload.total ? 'completed' : item.status),
-            updatedAt: Date.now(),
-            anomalousCount: item.anomalousCount + (payload.lastResult && payload.lastResult.isAnomalous ? 1 : 0),
-          }
-          : item);
-        const exists = next.some(item => item.id === payload.attackId);
-        if (!exists) {
-          return [
-            {
-              id: payload.attackId,
-              status: payload.status || 'running',
-              attackType: attackType,
-              positionCount: markers.length,
-              requestSummary: `${method} ${url}`,
-              sent: payload.sent,
-              total: payload.total,
-              anomalousCount: payload.lastResult && payload.lastResult.isAnomalous ? 1 : 0,
-              startedAt: Date.now(),
-              updatedAt: Date.now(),
-            },
-            ...next,
-          ];
-        }
-        return next;
-      });
+      setAttacks(prev => updateAttacksWithProgress(prev, payload, progressContext));
 
       if (payload.attackId === selectedAttackId) {
         setProgress({ sent: payload.sent, total: payload.total, status: payload.status || 'running' });
-        if (payload.lastResult) {
-          setResults(prev => {
-            const exists = prev.some(item => item.id === payload.lastResult.id);
-            return exists ? prev : [...prev, payload.lastResult];
-          });
-        }
+        setResults(prev => appendLastResultIfMissing(prev, payload.lastResult));
       }
     });
 
@@ -358,7 +421,7 @@ function IntruderPanel({ themeId }) {
   }
 
   async function startAttack() {
-    if (!sentinel || !sentinel.intruder) {
+    if (!sentinel?.intruder) {
       return;
     }
     if (markers.length === 0) {
@@ -396,12 +459,12 @@ function IntruderPanel({ themeId }) {
       setNoticeText('Intruder attack started.');
       await loadAttacks();
     } catch (error) {
-      setErrorText(error && error.message ? error.message : 'Unable to start intruder attack.');
+      setErrorText(error?.message || 'Unable to start intruder attack.');
     }
   }
 
   async function stopSelectedAttack() {
-    if (!sentinel || !sentinel.intruder || !selectedAttackId) {
+    if (!sentinel?.intruder || !selectedAttackId) {
       return;
     }
     setErrorText('');
@@ -418,6 +481,7 @@ function IntruderPanel({ themeId }) {
   const filteredResults = filterResults(sortResults(results, sortBy, sortDirection), filters);
   const selectedAttack = attacks.find(item => item.id === selectedAttackId) || null;
   const estimatedTotal = estimateAttackTotal(attackType, positionSources.map(entry => entry.source));
+  const progressBadgeStyle = getProgressBadgeStyle(progress.status);
 
   return (
     <Box p='4' h='100%' overflowY='auto' overflowX='hidden' wordBreak='break-word' borderWidth='1px' borderRadius='sm' borderColor='border.default'>
@@ -462,68 +526,93 @@ function IntruderPanel({ themeId }) {
           <Box flex='1' minW='320px'>
             <VStack align='stretch' spacing={3}>
               <HStack wrap='wrap'>
-                <Input value={method} onChange={event => setMethod(event.target.value.toUpperCase())} maxW='100px' fontFamily='mono' size='sm' />
-                <Input ref={urlRef} value={url} onChange={event => setUrl(event.target.value)} placeholder='https://target/path?x=§payload§' fontFamily='mono' size='sm' />
+                <Input value={method} onChange={event => setMethod(event.target.value.toUpperCase())} maxW='100px' fontFamily='mono' size='sm' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                <Input ref={urlRef} value={url} onChange={event => setUrl(event.target.value)} placeholder='https://target/path?x=§payload§' fontFamily='mono' size='sm' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                 <Button size='xs' variant='outline' onClick={() => insertMarker(urlRef, url, setUrl, 'payload')}>Mark URL</Button>
               </HStack>
 
-              <Textarea ref={headersRef} value={headersText} onChange={event => setHeadersText(event.target.value)} rows={4} fontFamily='mono' fontSize='xs' placeholder='host: example.com' />
+              <Textarea ref={headersRef} value={headersText} onChange={event => setHeadersText(event.target.value)} rows={4} fontFamily='mono' fontSize='xs' placeholder='host: example.com' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
               <HStack justify='space-between' wrap='wrap'>
-                <Text fontSize='xs' color='fg.muted'>Header values can also contain <Code>§markers§</Code>.</Text>
+                <Text fontSize='xs' color='fg.muted'>Header values can also contain <Code color='fg.default' bg='bg.subtle'>§markers§</Code>.</Text>
                 <Button size='xs' variant='outline' onClick={() => insertMarker(headersRef, headersText, setHeadersText, 'header-value')}>Mark Headers</Button>
               </HStack>
 
-              <Textarea ref={bodyRef} value={body} onChange={event => setBody(event.target.value)} rows={6} fontFamily='mono' fontSize='xs' placeholder='Request body with §payload§ markers' />
+              <Textarea ref={bodyRef} value={body} onChange={event => setBody(event.target.value)} rows={6} fontFamily='mono' fontSize='xs' placeholder='Request body with §payload§ markers' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
               <HStack justify='space-between' wrap='wrap'>
-                <Text fontSize='xs' color='fg.muted'>Detected positions: <Code>{markers.length}</Code> · Estimated requests: <Code>{String(estimatedTotal)}</Code></Text>
+                <Text fontSize='xs' color='fg.muted'>Detected positions: <Code color='fg.default' bg='bg.subtle'>{markers.length}</Code> · Estimated requests: <Code color='fg.default' bg='bg.subtle'>{String(estimatedTotal)}</Code></Text>
                 <Button size='xs' variant='outline' onClick={() => insertMarker(bodyRef, body, setBody, 'payload')}>Mark Body</Button>
               </HStack>
 
               <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
                 <Text fontWeight='semibold' fontSize='sm' mb={2}>Attack Profile</Text>
-                <select value={attackType} onChange={event => setAttackType(event.target.value)} style={{ width: '100%', padding: '6px 8px', fontSize: '12px' }}>
+                <Box
+                  as='select'
+                  aria-label='Attack profile'
+                  value={attackType}
+                  onChange={event => setAttackType(event.target.value)}
+                  color='fg.default'
+                  bg='bg.surface'
+                  borderColor='border.default'
+                  borderWidth='1px'
+                  borderRadius='sm'
+                  px='2'
+                  h='1.75rem'
+                >
                   <option value='sniper'>Single-point / Sniper</option>
                   <option value='pitchfork'>Pitchfork</option>
                   <option value='cluster-bomb'>Cluster Bomb</option>
-                </select>
+                </Box>
               </Box>
 
               <Box borderWidth='1px' borderRadius='sm' borderColor='border.default' p={3}>
                 <Text fontWeight='semibold' fontSize='sm' mb={2}>Payload Sources</Text>
                 <VStack align='stretch' spacing={3}>
-                  {positionSources.length === 0 ? <Text fontSize='xs' color='fg.muted'>Add at least one <Code>§marker§</Code> in URL, headers, or body.</Text> : null}
+                {positionSources.length === 0 ? <Text fontSize='xs' color='fg.muted'>Add at least one <Code color='fg.default' bg='bg.subtle'>§marker§</Code> in URL, headers, or body.</Text> : null}
                   {positionSources.map((entry, index) => {
                     const source = entry.source;
                     return (
                       <Box key={entry.marker.id} borderWidth='1px' borderRadius='sm' borderColor='border.default' p={2}>
-                        <Text fontSize='xs' fontWeight='semibold' mb={2}>{entry.marker.label} · default <Code>{entry.marker.defaultValue}</Code></Text>
-                        <select value={source.type} onChange={event => updatePositionSource(index, { type: event.target.value })} style={{ width: '100%', padding: '6px 8px', fontSize: '12px', marginBottom: '8px' }}>
+                      <Text fontSize='xs' fontWeight='semibold' mb={2}>{entry.marker.label} · default <Code color='fg.default' bg='bg.subtle'>{entry.marker.defaultValue}</Code></Text>
+                        <Box
+                          as='select'
+                          aria-label={`Payload source type for ${entry.marker.label}`}
+                          value={source.type}
+                          onChange={event => updatePositionSource(index, { type: event.target.value })}
+                          mb={2}
+                          color='fg.default'
+                          bg='bg.surface'
+                          borderColor='border.default'
+                          borderWidth='1px'
+                          borderRadius='sm'
+                          px='2'
+                          h='1.75rem'
+                        >
                           <option value='dictionary'>Dictionary</option>
                           <option value='bruteforce'>Brute-force charset</option>
                           <option value='sequential'>Sequential numeric</option>
-                        </select>
+                        </Box>
 
                         {source.type === 'dictionary' ? (
                           <VStack align='stretch' spacing={2}>
-                            <Input size='xs' placeholder='Optional dictionary file path' value={source.filePath || ''} onChange={event => updatePositionSource(index, { filePath: event.target.value })} />
-                            <Textarea size='xs' rows={4} placeholder='Or inline payloads, one per line' value={source.text || ''} onChange={event => updatePositionSource(index, { text: event.target.value })} fontFamily='mono' fontSize='xs' />
+                            <Input size='xs' aria-label={`Dictionary file path for ${entry.marker.label}`} placeholder='Optional dictionary file path' value={source.filePath || ''} onChange={event => updatePositionSource(index, { filePath: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Textarea size='xs' aria-label={`Inline dictionary payloads for ${entry.marker.label}`} rows={4} placeholder='Or inline payloads, one per line' value={source.text || ''} onChange={event => updatePositionSource(index, { text: event.target.value })} fontFamily='mono' fontSize='xs' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </VStack>
                         ) : null}
 
                         {source.type === 'bruteforce' ? (
                           <HStack wrap='wrap'>
-                            <Input size='xs' maxW='160px' placeholder='Charset' value={source.charset || ''} onChange={event => updatePositionSource(index, { charset: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Min' value={source.minLength} onChange={event => updatePositionSource(index, { minLength: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Max' value={source.maxLength} onChange={event => updatePositionSource(index, { maxLength: event.target.value })} />
+                            <Input size='xs' aria-label={`Brute-force charset for ${entry.marker.label}`} maxW='160px' placeholder='Charset' value={source.charset || ''} onChange={event => updatePositionSource(index, { charset: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Brute-force minimum length for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Min' value={source.minLength} onChange={event => updatePositionSource(index, { minLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Brute-force maximum length for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Max' value={source.maxLength} onChange={event => updatePositionSource(index, { maxLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </HStack>
                         ) : null}
 
                         {source.type === 'sequential' ? (
                           <HStack wrap='wrap'>
-                            <Input size='xs' maxW='100px' type='number' placeholder='Start' value={source.start} onChange={event => updatePositionSource(index, { start: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='End' value={source.end} onChange={event => updatePositionSource(index, { end: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Step' value={source.step} onChange={event => updatePositionSource(index, { step: event.target.value })} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Pad' value={source.padTo} onChange={event => updatePositionSource(index, { padTo: event.target.value })} />
+                            <Input size='xs' aria-label={`Sequential start value for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Start' value={source.start} onChange={event => updatePositionSource(index, { start: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential end value for ${entry.marker.label}`} maxW='100px' type='number' placeholder='End' value={source.end} onChange={event => updatePositionSource(index, { end: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential step value for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Step' value={source.step} onChange={event => updatePositionSource(index, { step: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential pad width for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Pad' value={source.padTo} onChange={event => updatePositionSource(index, { padTo: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </HStack>
                         ) : null}
                       </Box>
@@ -533,7 +622,7 @@ function IntruderPanel({ themeId }) {
               </Box>
 
               <HStack justify='space-between' wrap='wrap'>
-                <Text fontSize='xs' color='fg.muted'>Selected attack: <Code>{selectedAttack ? selectedAttack.requestSummary : 'none'}</Code></Text>
+                <Text fontSize='xs' color='fg.muted'>Selected attack: <Code color='fg.default' bg='bg.subtle'>{selectedAttack ? selectedAttack.requestSummary : 'none'}</Code></Text>
                 <Button size='sm' colorPalette='red' onClick={startAttack}>Start Attack</Button>
               </HStack>
 
@@ -541,59 +630,66 @@ function IntruderPanel({ themeId }) {
                 <HStack justify='space-between' wrap='wrap' mb={2}>
                   <Text fontWeight='semibold' fontSize='sm'>Live Results</Text>
                   <HStack>
-                    <Badge colorPalette={progress.status === 'completed' ? 'green' : progress.status === 'stopped' ? 'orange' : 'blue'}>{progress.status}</Badge>
+                <Badge 
+                  variant='outline' 
+                  color='var(--sentinel-fg-default)' 
+                  borderColor={progressBadgeStyle.borderColor} 
+                  bg={progressBadgeStyle.bg}
+                >
+                  {progress.status}
+                </Badge>
                     <Text fontSize='xs' color='fg.muted'>{progress.sent} / {progress.total || (selectedAttack ? selectedAttack.total : 0)} sent</Text>
                   </HStack>
                 </HStack>
 
                 <HStack wrap='wrap' mb={2}>
-                  <Input size='xs' maxW='120px' placeholder='Status' value={filters.statusCode} onChange={event => setFilters(prev => ({ ...prev, statusCode: event.target.value }))} />
-                  <Input size='xs' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} />
-                  <Input size='xs' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} />
+                  <Input size='xs' aria-label='Filter intruder results by status code' maxW='120px' placeholder='Status' value={filters.statusCode} onChange={event => setFilters(prev => ({ ...prev, statusCode: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' aria-label='Filter intruder results by maximum response length' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' aria-label='Filter intruder results by maximum duration in milliseconds' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Button size='xs' variant={filters.anomaliesOnly ? 'solid' : 'outline'} onClick={() => setFilters(prev => ({ ...prev, anomaliesOnly: !prev.anomaliesOnly }))}>Anomalies Only</Button>
-                  <select value={sortBy} onChange={event => setSortBy(event.target.value)} style={{ padding: '6px 8px', fontSize: '12px' }}>
+                  <Box as='select' aria-label='Sort intruder results by' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='duration'>Sort by Duration</option>
                     <option value='statusCode'>Sort by Status</option>
                     <option value='length'>Sort by Length</option>
-                  </select>
-                  <select value={sortDirection} onChange={event => setSortDirection(event.target.value)} style={{ padding: '6px 8px', fontSize: '12px' }}>
+                  </Box>
+                  <Box as='select' aria-label='Intruder results sort direction' value={sortDirection} onChange={event => setSortDirection(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='desc'>Desc</option>
                     <option value='asc'>Asc</option>
-                  </select>
+                  </Box>
                 </HStack>
 
                 {loadingResults ? <Text fontSize='xs' color='fg.muted'>Loading results...</Text> : null}
                 {!loadingResults && filteredResults.length === 0 ? <Text fontSize='xs' color='fg.muted'>No results for the selected attack.</Text> : null}
                 {filteredResults.length > 0 ? (
                   <Box overflowX='auto'>
-                    <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Payload</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Status</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Length</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Time</th>
-                          <th style={{ textAlign: 'left', padding: '6px' }}>Anomaly</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <Box as='table' w='100%' fontSize='xs' css={{ borderCollapse: 'collapse' }}>
+                      <Box as='thead'>
+                        <Box as='tr'>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Payload</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Status</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Length</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Time</Box>
+                          <Box as='th' textAlign='left' p={1.5} color='fg.muted'>Anomaly</Box>
+                        </Box>
+                      </Box>
+                      <Box as='tbody'>
                         {filteredResults.map(result => (
-                          <tr key={result.id} style={{ borderTop: '1px solid var(--sentinel-border-default, #2a3948)' }}>
-                            <td style={{ padding: '6px', fontFamily: 'monospace' }}>{result.payload}</td>
-                            <td style={{ padding: '6px' }}><Code>{result.statusCode}</Code></td>
-                            <td style={{ padding: '6px' }}>{result.length}</td>
-                            <td style={{ padding: '6px' }}>{result.duration}ms</td>
-                            <td style={{ padding: '6px' }}>
+                          <Box as='tr' key={result.id} borderTopWidth='1px' borderColor='border.default'>
+                            <Box as='td' p={1.5} fontFamily='mono'>{result.payload}</Box>
+                            <Box as='td' p={1.5}><Code color='fg.default' bg='bg.subtle'>{result.statusCode}</Code></Box>
+                            <Box as='td' p={1.5}>{result.length}</Box>
+                            <Box as='td' p={1.5}>{result.duration}ms</Box>
+                            <Box as='td' p={1.5}>
                               {result.isAnomalous ? (
-                                <Badge colorPalette='orange'>{result.anomalyReasons.join(', ') || 'anomalous'}</Badge>
+                                <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor='orange.500' bg='rgba(249,115,22,0.1)'>{result.anomalyReasons.join(', ') || 'anomalous'}</Badge>
                               ) : (
-                                <Badge colorPalette='green'>baseline</Badge>
+                                <Badge variant='outline' color='var(--sentinel-fg-default)' borderColor='green.500' bg='rgba(34,197,94,0.1)'>baseline</Badge>
                               )}
-                            </td>
-                          </tr>
+                            </Box>
+                          </Box>
                         ))}
-                      </tbody>
-                    </table>
+                      </Box>
+                    </Box>
                   </Box>
                 ) : null}
               </Box>
@@ -608,4 +704,8 @@ function IntruderPanel({ themeId }) {
   );
 }
 
-module.exports = IntruderPanel;
+IntruderPanel.propTypes = {
+  themeId: PropTypes.string,
+};
+
+export default IntruderPanel;
