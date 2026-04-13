@@ -106,9 +106,14 @@ function isValueChar(ch) {
 		ch === '+' || ch === '/' || ch === '=' || ch === '-';
 }
 
+// Skips common ASCII whitespace (space, tab, CR, LF) to match \s* intent without regex.
 function skipSpaces(text, start) {
 	let i = start;
-	while (i < text.length && text[i] === ' ') {
+	while (i < text.length) {
+		const ch = text[i];
+		if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') {
+			break;
+		}
 		i += 1;
 	}
 	return i;

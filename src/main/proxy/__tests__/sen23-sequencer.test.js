@@ -111,6 +111,24 @@ describe('SEN-023 sequencer service', () => {
     expect(report.report.exportCsv).toMatch('truncated_ok');
   });
 
+  it('extracts token when key and value are separated by tabs or newlines', async () => {
+    // Verifies that skipSpaces handles \t, \r, \n (not just space) after the separator.
+    const sequencer = makeBodySequencer('api_key\t=\ttabbed_val99');
+    const started = await sequencer.captureStart({
+      config: {
+        sampleSize: 5,
+        tokenField: { source: 'body', key: 'api_key' },
+        requestTemplate: {
+          method: 'GET', url: 'https://app.test/', host: 'app.test',
+          path: '/', headers: { host: 'app.test' }, tls: true,
+        },
+      },
+    });
+    expect(started.sampleCount).toBe(5);
+    const report = await sequencer.analyze({ sessionId: started.sessionId });
+    expect(report.report.exportCsv).toMatch('tabbed_val99');
+  });
+
   it('supports capture using a history request id resolver', async () => {
     const sequencer = createSequencerService({
       getTrafficItem: async () => ({
