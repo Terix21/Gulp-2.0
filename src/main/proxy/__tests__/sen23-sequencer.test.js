@@ -54,7 +54,7 @@ describe('SEN-023 sequencer service', () => {
   });
 
   it('extracts token from response body using deterministic key scan', async () => {
-    const sequencer = makeBodySequencer('csrf_token = abc123XYZ', { source: 'body', key: 'csrf_token' });
+    const sequencer = makeBodySequencer('csrf_token = abc123XYZ');
     const started = await sequencer.captureStart({
       config: {
         sampleSize: 5,
@@ -74,7 +74,7 @@ describe('SEN-023 sequencer service', () => {
 
   it('does not treat regex metacharacters in key as a pattern', async () => {
     // Key contains regex metacharacters — must not throw and must not match spuriously.
-    const sequencer = makeBodySequencer('value = safe999', { source: 'body', key: '.*[^]' });
+    const sequencer = makeBodySequencer('value = safe999');
     const started = await sequencer.captureStart({
       config: {
         sampleSize: 5,
@@ -94,7 +94,7 @@ describe('SEN-023 sequencer service', () => {
     const shortKey = 'a'.repeat(256);
     // Body uses the 256-char key (which is what the truncated key will scan for)
     const body = `${shortKey} = truncated_ok`;
-    const sequencer = makeBodySequencer(body, { source: 'body', key: longKey });
+    const sequencer = makeBodySequencer(body);
     const started = await sequencer.captureStart({
       config: {
         sampleSize: 5,
@@ -141,5 +141,36 @@ describe('SEN-023 sequencer service', () => {
     expect(started.sampleCount).toBe(6);
     const report = await sequencer.analyze({ sessionId: started.sessionId });
     expect(report.report.averageLength).toBeGreaterThan(0);
+  });
+
+  it('parses Set-Cookie lines with Expires commas and multiple cookie pairs', async () => {
+    const sequencer = createSequencerService({
+      forwardRequest: async () => ({
+        statusCode: 200,
+        headers: {
+          'set-cookie': 'foo=bar; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Path=/, session=token-xyz; Path=/; HttpOnly',
+        },
+        body: 'ok',
+      }),
+    });
+
+    const started = await sequencer.captureStart({
+      config: {
+        sampleSize: 5,
+        tokenField: { source: 'cookie', key: 'session' },
+        requestTemplate: {
+          method: 'GET',
+          url: 'https://app.test/login',
+          host: 'app.test',
+          path: '/login',
+          headers: { host: 'app.test' },
+          tls: true,
+        },
+      },
+    });
+
+    expect(started.sampleCount).toBe(5);
+    const analyzed = await sequencer.analyze({ sessionId: started.sessionId });
+    expect(analyzed.report.exportCsv).toMatch('token-xyz');
   });
 });

@@ -106,6 +106,42 @@ function isValueChar(ch) {
 		ch === '+' || ch === '/' || ch === '=' || ch === '-';
 }
 
+function skipSpaces(text, start) {
+	let i = start;
+	while (i < text.length && text[i] === ' ') {
+		i += 1;
+	}
+	return i;
+}
+
+function readBodyTokenAt(body, start) {
+	let i = skipSpaces(body, start);
+	if (i >= body.length || (body[i] !== ':' && body[i] !== '=')) {
+		return { token: '', nextPos: start + 1 };
+	}
+
+	i += 1;
+	i = skipSpaces(body, i);
+	// Quotes are delimiters and not part of allowed token characters.
+	if (i < body.length && (body[i] === '"' || body[i] === "'")) {
+		i += 1;
+	}
+
+	const valueStart = i;
+	while (i < body.length && isValueChar(body[i])) {
+		i += 1;
+	}
+
+	if (i <= valueStart) {
+		return { token: '', nextPos: start + 1 };
+	}
+
+	return {
+		token: body.slice(valueStart, i),
+		nextPos: start + 1,
+	};
+}
+
 // Deterministic linear scan for "key = value" or "key : value" patterns in body text.
 // Avoids constructing a RegExp from user-supplied key to prevent regex injection and ReDoS.
 function extractBodyToken(body, key) {
@@ -115,23 +151,15 @@ function extractBodyToken(body, key) {
 
 	while (pos < body.length) {
 		const idx = lowerBody.indexOf(lowerKey, pos);
-		if (idx === -1) return '';
-
-		let i = idx + lowerKey.length;
-		while (i < body.length && body[i] === ' ') i++;           // skip whitespace
-		if (i >= body.length || (body[i] !== ':' && body[i] !== '=')) {
-			pos = idx + 1;                                         // not a separator — keep scanning
-			continue;
+		if (idx === -1) {
+			return '';
 		}
-		i++;                                                       // skip separator
-		while (i < body.length && body[i] === ' ') i++;           // skip whitespace after separator
-		// Skip optional opening quote; closing quote naturally terminates extraction
-		// because quote chars are not valid value chars per isValueChar().
-		if (i < body.length && (body[i] === '"' || body[i] === "'")) i++;
-		const start = i;
-		while (i < body.length && isValueChar(body[i])) i++;
-		if (i > start) return body.slice(start, i);
-		pos = idx + 1;
+
+		const result = readBodyTokenAt(body, idx + lowerKey.length);
+		if (result.token) {
+			return result.token;
+		}
+		pos = result.nextPos;
 	}
 	return '';
 }
@@ -144,13 +172,85 @@ function normalizeHeaders(headers = {}) {
 	return out;
 }
 
+function isCookieNameChar(character) {
+	if (!character) {
+		return false;
+	}
+	const code = character.codePointAt(0);
+	return (
+		(code >= 48 && code <= 57)
+		|| (code >= 65 && code <= 90)
+		|| (code >= 97 && code <= 122)
+		|| character === '!'
+		|| character === '#'
+		|| character === '$'
+		|| character === '%'
+		|| character === '&'
+		|| character === '\''
+		|| character === '*'
+		|| character === '+'
+		|| character === '-'
+		|| character === '.'
+		|| character === '^'
+		|| character === '_'
+		|| character === '`'
+		|| character === '|'
+		|| character === '~'
+	);
+}
+
+function canStartCookiePair(text, index) {
+	let cursor = index;
+	while (cursor < text.length && (text[cursor] === ' ' || text[cursor] === '\t')) {
+		cursor += 1;
+	}
+
+	const start = cursor;
+	while (cursor < text.length && isCookieNameChar(text[cursor])) {
+		cursor += 1;
+	}
+
+	return cursor !== start && cursor < text.length && text[cursor] === '=';
+}
+
+function splitCookieLine(line) {
+	const segments = [];
+	let start = 0;
+
+	for (let i = 0; i < line.length; i += 1) {
+		if (line[i] !== ',') {
+			continue;
+		}
+
+		if (!canStartCookiePair(line, i + 1)) {
+			continue;
+		}
+
+		segments.push(line.slice(start, i).trim());
+		start = i + 1;
+	}
+
+	segments.push(line.slice(start).trim());
+	return segments.filter(Boolean);
+}
+
 function parseCookies(setCookieHeader) {
 	const value = toText(setCookieHeader);
 	if (!value) {
 		return [];
 	}
 
-	const segments = value.split(/\r?\n|,(?=\s*[^;=]+=)/g).map(item => item.trim()).filter(Boolean);
+	const normalized = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+	const lines = normalized.split('\n');
+	const segments = [];
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (!trimmed) {
+			continue;
+		}
+		segments.push(...splitCookieLine(trimmed));
+	}
+
 	return segments.map(cookieLine => {
 		const first = cookieLine.split(';')[0] || '';
 		const separator = first.indexOf('=');
