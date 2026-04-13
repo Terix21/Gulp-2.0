@@ -50,6 +50,9 @@ import ExtensionsPanel from './sentinel/ExtensionsPanel';
 import { modules, moduleDescriptions } from './app-constants';
 import { getOverlayScrim } from './sentinel/theme-utils';
 
+const buildInfoModules = import.meta.glob('../../../contracts/build-info.json', { eager: true });
+const generatedBuildInfo = buildInfoModules['../../../contracts/build-info.json']?.default ?? {};
+
 const panelStatusFields = {
   Dashboard: [
     { label: 'Open issues', key: 'openIssues' },
@@ -1029,6 +1032,15 @@ function App() {
   } = useProxySettings(settingsOpen, pushLog);
 
   const versions = globalThis.window?.electronInfo?.versions ?? {};
+  const buildInfoSource = [
+    globalThis.window?.buildInfo,
+    globalThis.window?.electronInfo?.build,
+    generatedBuildInfo,
+  ].find((candidate) => candidate?.version || candidate?.default?.version) ?? {};
+  const buildInfo = buildInfoSource?.default ?? buildInfoSource;
+  const buildVersion = buildInfo?.version && buildInfo?.git?.commitCount
+    ? `${buildInfo.version}+${buildInfo.git.commitCount}`
+    : buildInfo?.version || 'unknown';
 
   const addPane = React.useCallback((moduleName) => {
     setOpenPanes((prev) => {
@@ -1413,7 +1425,7 @@ function App() {
               </Button>
               <Text>Memory <Code {...shellCodeProps}>{memoryUsage}</Code></Text>
               <Text>Node <Code {...shellCodeProps}>{versions.node || 'unknown'}</Code></Text>
-              <Text>Electron <Code {...shellCodeProps}>{versions.electron || 'unknown'}</Code></Text>
+              <Text>Build <Code {...shellCodeProps}>{buildVersion}</Code></Text>
             </HStack>
           </Flex>
         </Flex>

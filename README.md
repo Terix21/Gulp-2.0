@@ -24,6 +24,9 @@ Sentinel is a desktop web-security workbench built with Electron in the main pro
 
 ## Build and Run
 
+Prerequisite:
+- Node.js `>= 24.0.0`
+
 ```bash
 npm install
 npm run build
@@ -43,6 +46,18 @@ npm run dev
 ```bash
 npm run rebuild:native
 ```
+
+## Windows Packaging
+- Packaging is already configured in `package.json` (`electron-builder`, `pack:win`, `installer:win`, and NSIS build config).
+- Standard packaging flow:
+
+```bash
+npm run build
+npm run pack:win
+npm run installer:win
+```
+
+- Installer artifacts are written to `release/`.
 
 ## Documentation
 Project documentation now lives under `instructions/`:

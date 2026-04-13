@@ -1,5 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+function readBuildInfo() {
+  try {
+    const parsed = require('../contracts/build-info.json');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helper — wraps ipcRenderer.invoke so renderer code never imports electron.
 // Channel names are validated against the IPC contract by
@@ -186,4 +195,7 @@ contextBridge.exposeInMainWorld('electronInfo', {
     chrome:   process.versions.chrome,
     electron: process.versions.electron,
   },
+  build: readBuildInfo(),
 });
+
+contextBridge.exposeInMainWorld('buildInfo', readBuildInfo());
