@@ -5,6 +5,7 @@
   - `.github/instructions/preferences.instructions.md`
   - `.github/instructions/edge-cases.instructions.md`
   - `.github/instructions/context-management.instructions.md`
+  - `.github/instructions/secure-code.instructions.md`
   - `.github/instructions/_template.instructions.md`
   - `.vscode/settings.json`
 - If any are missing:
@@ -23,6 +24,7 @@
 - `electron` -> `.github/instructions/electron.instructions.md` (active)
 - `vite` -> `.github/instructions/vite.instructions.md` (active)
 - `react` -> `.github/instructions/react.instructions.md` (active)
+- `secure-code` -> `.github/instructions/secure-code.instructions.md` (active)
 
 ## Append-Only Knowledge Updates
 - Keep these instruction logs append-only.
@@ -117,3 +119,11 @@
 - Never remove or rename existing preload-exposed IPC channels without a coordinated update to both main and renderer.
 - Adding new IPC channels is a backwards-compatible change.
 - `git.commitCount` in `src/contracts/build-info.json` is the monotonically increasing build iteration number.
+
+## Append-Only Directive Update (2026-04-12): Node Built-In Import Specifiers
+- In Node.js/CommonJS files, prefer `node:`-prefixed built-in module specifiers for clarity and supply-chain safety (`require('node:fs')`, `require('node:path')`, `require('node:child_process')`).
+- Avoid bare built-in specifiers (`'fs'`, `'path'`, `'child_process'`) in new or modified code unless compatibility constraints are documented in the change.
+
+## Append-Only Directive Update (2026-04-12): TypeScript Module Resolution Deprecation
+- For repository-owned TypeScript configs, do not introduce `"moduleResolution": "node"` (TypeScript legacy `node10` behavior). Prefer modern values such as `"bundler"`, `"node16"`, or `"nodenext"` based on runtime and tooling.
+- When a third-party dependency ships a deprecated `moduleResolution` value and immediate migration is out of scope, use `"ignoreDeprecations": "6.0"` as a temporary compatibility guard and track removal during dependency updates.

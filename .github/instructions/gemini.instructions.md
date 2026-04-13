@@ -5,6 +5,7 @@
   - `.github/instructions/preferences.instructions.md`
   - `.github/instructions/edge-cases.instructions.md`
   - `.github/instructions/context-management.instructions.md`
+  - `.github/instructions/secure-code.instructions.md`
   - `.github/instructions/_template.instructions.md`
   - `.vscode/settings.json`
 - If any are missing:
@@ -23,6 +24,7 @@
 - `electron` -> `.github/instructions/electron.instructions.md` (active)
 - `vite` -> `.github/instructions/vite.instructions.md` (active)
 - `react` -> `.github/instructions/react.instructions.md` (active)
+- `secure-code` -> `.github/instructions/secure-code.instructions.md` (active)
 
 ## Append-Only Knowledge Updates
 - Keep these instruction logs append-only.

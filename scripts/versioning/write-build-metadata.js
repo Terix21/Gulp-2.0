@@ -1,10 +1,24 @@
-const fs = require('fs');
-const path = require('path');
-const cp = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const cp = require('node:child_process');
 
-function runGit(command) {
+// Resolve git to an absolute path to prevent PATH-hijacking attacks where a
+// malicious executable named 'git' is placed earlier in PATH.
+// GIT_BIN env var allows explicit pinning in CI or security-hardened environments.
+const GIT_BIN = (function resolveGitBin() {
+  if (process.env.GIT_BIN) return process.env.GIT_BIN;
+  const candidates = process.platform === 'win32'
+    ? [String.raw`C:\Program Files\Git\bin\git.exe`, String.raw`C:\Program Files (x86)\Git\bin\git.exe`]
+    : ['/usr/bin/git', '/usr/local/bin/git'];
+  return candidates.find(p => fs.existsSync(p)) ?? 'git';
+}());
+
+function runGit(args) {
   try {
-    return cp.execSync(command, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    return cp.execFileSync(GIT_BIN, args, {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8'
+    }).trim();
   } catch {
     return 'unknown';
   }
@@ -35,10 +49,10 @@ const metadata = {
   appName: String(pkg.name || 'unknown'),
   version: String(pkg.version || '0.0.0'),
   git: {
-    commit: runGit('git rev-parse HEAD'),
-    shortCommit: runGit('git rev-parse --short HEAD'),
-    branch: process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || runGit('git rev-parse --abbrev-ref HEAD'),
-    commitCount: runGit('git rev-list --count HEAD')
+    commit: runGit(['rev-parse', 'HEAD']),
+    shortCommit: runGit(['rev-parse', '--short', 'HEAD']),
+    branch: process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || runGit(['rev-parse', '--abbrev-ref', 'HEAD']),
+    commitCount: runGit(['rev-list', '--count', 'HEAD'])
   },
   build: {
     timestampUtc: new Date().toISOString(),

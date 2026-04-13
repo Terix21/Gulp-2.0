@@ -28,3 +28,5 @@
 - This Markdown file replaces the previous XML snapshot (`SonarQubeProfile.xml`).
 - Use this file as the repo-local, human-readable source of truth when reviewing Sonar compliance expectations.
 - The live SonarQube server profile remains authoritative for CI analysis behavior.
+- `S5843` applies to all modified regex in scanner/proxy paths; any user-influenced regex must be demonstrably linear or replaced with deterministic parsing to avoid ReDoS-class risk.
+- Security-sensitive randomness findings (for example `Math.random()` in main-process scanner/proxy flows) should be treated as required fixes; prefer `node:crypto` CSPRNG primitives for generated IDs, markers, and correlation tokens that may cross trust boundaries.

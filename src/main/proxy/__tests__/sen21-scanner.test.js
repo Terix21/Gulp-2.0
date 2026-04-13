@@ -34,6 +34,38 @@ describe('SEN-021 scanner engine', () => {
     expect(persisted.some(item => item.name.includes('cookie') || item.name.includes('Cookie'))).toBe(true);
   });
 
+  it('parses Set-Cookie lines with Expires commas and multiple cookie values', async () => {
+    const persisted = [];
+    const scanner = createScannerEngine({
+      persistFinding: async finding => {
+        persisted.push(finding);
+      },
+    });
+
+    await scanner.observeTraffic({
+      id: 'hist-2',
+      request: {
+        method: 'GET',
+        host: 'cookie.test',
+        path: '/session',
+      },
+      response: {
+        statusCode: 200,
+        headers: {
+          'set-cookie': [
+            'sid=abc123; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Path=/; HttpOnly',
+            'lang=en; Path=/',
+            'theme=dark; Path=/; Secure',
+          ].join(', '),
+        },
+        body: 'ok',
+      },
+    });
+
+    const cookieFindings = persisted.filter(item => item.name === 'Weak cookie attributes');
+    expect(cookieFindings.length).toBe(3);
+  });
+
   it('runs active checks and generates findings for SQLi/XSS/SSRF heuristics', async () => {
     const findings = [];
     const scanner = createScannerEngine({
@@ -55,7 +87,7 @@ describe('SEN-021 scanner engine', () => {
         }
         return {
           statusCode: 200,
-          headers: { location: 'http://sentinel-token.oob.invalid/' },
+          headers: { location: 'https://sentinel-token.oob.invalid/' },
           body: 'redirect sentinel-token.oob.invalid',
         };
       },
@@ -96,5 +128,49 @@ describe('SEN-021 scanner engine', () => {
     const jobs = [...scanner.jobs.values()];
     expect(jobs[0].targets).toEqual(['https://allowed.test/a']);
     expect(jobs[0].skippedTargets).toEqual(['https://blocked.test/b']);
+  });
+
+  it('stops an in-progress active scan and keeps stopped status', async () => {
+    let releaseFirstProbe;
+    const firstProbeGate = new Promise(resolve => {
+      releaseFirstProbe = resolve;
+    });
+
+    let requestCount = 0;
+    const scanner = createScannerEngine({
+      forwardRequest: async () => {
+        requestCount += 1;
+        if (requestCount === 1) {
+          await firstProbeGate;
+        }
+        return { statusCode: 200, headers: {}, body: 'ok' };
+      },
+    });
+
+    const startPromise = scanner.start({
+      targets: ['https://cancel.test/a'],
+      config: { mode: 'active' },
+    });
+
+    let scanId;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      [scanId] = [...scanner.jobs.keys()];
+      if (scanId) {
+        break;
+      }
+      await Promise.resolve();
+    }
+    expect(typeof scanId).toBe('string');
+
+    const stopped = await scanner.stop({ scanId });
+    expect(stopped.ok).toBe(true);
+
+    releaseFirstProbe();
+    const started = await startPromise;
+    expect(started.scanId).toBe(scanId);
+
+    const job = scanner.jobs.get(scanId);
+    expect(job.status).toBe('stopped');
+    expect(requestCount).toBe(1);
   });
 });
