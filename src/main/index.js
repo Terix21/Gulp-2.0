@@ -122,7 +122,10 @@ async function stageExtensionPackage(packagePath) {
 
   await fs.mkdir(trustedRoot, { recursive: true });
   try {
-    await fs.cp(resolvedSourcePath, stagedPath, { recursive: true });
+    // dereference: true resolves symlinks during copy so the staged tree
+    // contains real files only — symlinks pointing outside the package cannot
+    // bypass the trusted-root check in readPackagedExtension().
+    await fs.cp(resolvedSourcePath, stagedPath, { recursive: true, dereference: true });
   } catch (error) {
     try {
       await cleanup();
