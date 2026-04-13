@@ -634,6 +634,17 @@ class ExtensionHost extends EventEmitter {
 			if (!extension.enabled || !extension.runtime || !extension.subscriptions) {
 				continue;
 			}
+
+			let hasMatchingSubscription = false;
+			for (const subscribedEvent of extension.subscriptions.values()) {
+				if (subscribedEvent === normalizedEvent) {
+					hasMatchingSubscription = true;
+					break;
+				}
+			}
+			if (!hasMatchingSubscription) {
+				continue;
+			}
 			if (!this.canProcessEvent(extension.id)) {
 				this.addAudit({
 					extensionId: extension.id,
