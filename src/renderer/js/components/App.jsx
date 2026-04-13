@@ -49,7 +49,9 @@ import EmbeddedBrowserPanel from './sentinel/EmbeddedBrowserPanel';
 import ExtensionsPanel from './sentinel/ExtensionsPanel';
 import { modules, moduleDescriptions } from './app-constants';
 import { getOverlayScrim } from './sentinel/theme-utils';
-import generatedBuildInfo from '../../../contracts/build-info.json';
+
+const buildInfoModules = import.meta.glob('../../../contracts/build-info.json', { eager: true });
+const generatedBuildInfo = buildInfoModules['../../../contracts/build-info.json']?.default ?? {};
 
 const panelStatusFields = {
   Dashboard: [
