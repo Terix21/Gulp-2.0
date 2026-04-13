@@ -30,6 +30,19 @@ function executePreload() {
           },
         };
       }
+      if (id === 'node:fs') {
+        return fs;
+      }
+      if (id === 'node:path') {
+        return path;
+      }
+      if (id === '../contracts/build-info.json') {
+        return {
+          appName: 'gulp',
+          version: '1.0.0',
+          git: { commitCount: '64' },
+        };
+      }
       throw new Error(`Unexpected module in preload test: ${id}`);
     },
     process: {
@@ -59,11 +72,11 @@ function executePreload() {
 }
 
 describe('Preload Bridge API Surface', () => {
-  it('exposes sentinel and electronInfo through contextBridge', () => {
+  it('exposes sentinel, electronInfo, and buildInfo through contextBridge', () => {
     const { exposed, exposeInMainWorld } = executePreload();
 
-    expect(exposeInMainWorld).toHaveBeenCalledTimes(2);
-    expect(Object.keys(exposed).sort((a, b) => a.localeCompare(b))).toEqual(['electronInfo', 'sentinel']);
+    expect(exposeInMainWorld).toHaveBeenCalledTimes(3);
+    expect(Object.keys(exposed).sort((a, b) => a.localeCompare(b))).toEqual(['buildInfo', 'electronInfo', 'sentinel']);
   });
 
   it('exposes sentinel namespaces expected by the IPC contract', () => {
@@ -132,6 +145,13 @@ describe('Preload Bridge API Surface', () => {
       chrome: '130.0.1',
       electron: '41.1.0',
     });
+  });
+
+  it('buildInfo exposes generated build metadata when available', () => {
+    const { exposed } = executePreload();
+
+    expect(typeof exposed.buildInfo).toBe('object');
+    expect(typeof exposed.buildInfo.version).toBe('string');
   });
 });
 

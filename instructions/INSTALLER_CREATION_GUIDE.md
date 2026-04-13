@@ -1,70 +1,24 @@
 # Installer Creation Guide (Windows)
 
-This guide shows how to create a Windows installer for this Electron app.
+This guide shows the current packaging flow for creating a Windows installer for this Electron app.
 
-## 1. Install packaging tools
+## Current project status
+Packaging is already configured in this repository:
+- `electron-builder` is already present in `devDependencies`.
+- `pack:win` and `installer:win` scripts are already defined in `package.json`.
+- Electron Builder `build` config (NSIS target, output directory, packaged files) is already defined in `package.json`.
+
+You do not need to add new packaging scripts/config unless you are intentionally changing release behavior.
+
+## 1. Install dependencies
 
 Run in the project root:
 
 ```powershell
-npm install --save-dev electron-builder
+npm install
 ```
 
-## 2. Add packaging scripts to package.json
-
-Add these scripts under `scripts`:
-
-```json
-{
-  "scripts": {
-    "pack:win": "npm run rebuild:native && npm run build && electron-builder --win --dir",
-    "installer:win": "npm run rebuild:native && npm run build && electron-builder --win nsis"
-  }
-}
-```
-
-- `pack:win` creates an unpacked app folder (good for quick smoke checks).
-- `installer:win` creates an NSIS installer `.exe`.
-
-## 3. Add electron-builder configuration
-
-Add a `build` section to `package.json`:
-
-```json
-{
-  "build": {
-    "appId": "com.trogon4081.gulp",
-    "productName": "Sentinel",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "extraMetadata": {
-      "main": "dist/main/index.js"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
-  }
-}
-```
-
-## 4. Build app artifacts first
+## 2. Build app artifacts first
 
 Your runtime entry is `dist/main/index.js`, so always build before packaging:
 
@@ -72,7 +26,15 @@ Your runtime entry is `dist/main/index.js`, so always build before packaging:
 npm run build
 ```
 
-## 5. Generate installer
+## 3. Optional smoke package (unpacked)
+
+Generate an unpacked Windows app folder for fast validation:
+
+```powershell
+npm run pack:win
+```
+
+## 4. Generate installer
 
 ```powershell
 npm run installer:win
@@ -82,14 +44,14 @@ Expected output location:
 
 - `release/` (installer executable and packaging artifacts)
 
-## 6. Verify installer output
+## 5. Verify installer output
 
 1. Run the generated installer `.exe`.
 2. Launch the installed app.
 3. Confirm startup works (no blank window).
 4. Confirm core workflows load (Proxy, History, Repeater).
 
-## 7. Optional: code signing (recommended)
+## 6. Optional: code signing (recommended)
 
 Unsigned installers trigger SmartScreen warnings. For production distribution:
 
@@ -97,12 +59,12 @@ Unsigned installers trigger SmartScreen warnings. For production distribution:
 2. Set signing variables in your CI/local environment.
 3. Configure `electron-builder` signing options for Windows.
 
-## 8. Optional: add icons and metadata
+## 7. Optional: add icons and metadata
 
 - Add app icon path in `build.win.icon`.
 - Add publisher/contact metadata as needed for release channels.
 
-## 9. CI automation (optional)
+## 8. CI automation (optional)
 
 Use a CI job that runs:
 
@@ -121,7 +83,10 @@ Then publish artifacts from `release/`.
   - Ensure `npm run build` completed and `dist/main/index.js` exists.
 
 - Native module errors (for example `sqlite3`)
-  - Rebuild dependencies against Electron version and retry packaging.
+  - Run `npm run rebuild:native`, then retry `npm run installer:win`.
 
 - Installer starts but app fails
   - Confirm `build.files` includes `dist/**/*` and runtime dependencies.
+
+- CI install skipped postinstall scripts
+  - If native module ABI mismatches occur after `npm ci --ignore-scripts`, run `npm run rebuild:native` before packaging.
