@@ -30,12 +30,6 @@ function executePreload() {
           },
         };
       }
-      if (id === 'node:fs') {
-        return fs;
-      }
-      if (id === 'node:path') {
-        return path;
-      }
       if (id === '../contracts/build-info.json') {
         return {
           appName: 'gulp',
