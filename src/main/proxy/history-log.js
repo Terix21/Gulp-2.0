@@ -10,7 +10,7 @@ const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
 
 function clone(value) {
-	return JSON.parse(JSON.stringify(value));
+	return structuredClone(value);
 }
 
 function matchesFilter(item, filter = {}) {

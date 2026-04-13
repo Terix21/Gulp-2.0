@@ -10,29 +10,29 @@ SEN-019 Decoder transformations
 const zlib = require('node:zlib');
 
 function clone(value) {
-	return JSON.parse(JSON.stringify(value));
+	return structuredClone(value);
 }
 
 function encodeHtmlEntities(input) {
 	return String(input || '')
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#39;');
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;');
 }
 
 function decodeHtmlEntities(input) {
 	return String(input || '')
-		.replace(/&#39;/g, "'")
-		.replace(/&quot;/g, '"')
-		.replace(/&gt;/g, '>')
-		.replace(/&lt;/g, '<')
-		.replace(/&amp;/g, '&');
+		.replaceAll('&#39;', "'")
+		.replaceAll('&quot;', '"')
+		.replaceAll('&gt;', '>')
+		.replaceAll('&lt;', '<')
+		.replaceAll('&amp;', '&');
 }
 
 function normalizeHex(value) {
-	return String(value || '').replace(/\s+/g, '').toLowerCase();
+	return String(value || '').replaceAll(/\s+/g, '').toLowerCase();
 }
 
 function ensureEvenHex(hexText) {

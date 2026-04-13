@@ -11,7 +11,7 @@ const { randomUUID } = require('node:crypto');
 const { forwardRequest } = require('./protocol-support');
 
 function clone(value) {
-	return JSON.parse(JSON.stringify(value));
+	return structuredClone(value);
 }
 
 /**
@@ -23,8 +23,8 @@ function sanitiseResponse(response) {
 	if (!response) {
 		return null;
 	}
-	const { rawBody, ...rest } = response;
-	void rawBody;
+	const rest = { ...response };
+	delete rest.rawBody;
 	return rest;
 }
 
@@ -110,8 +110,8 @@ class RepeaterService {
 	}
 
 	_entryWithoutSends(entry) {
-		const { sends, ...rest } = entry;
-		void sends;
+		const rest = { ...entry };
+		delete rest.sends;
 		return clone(rest);
 	}
 }

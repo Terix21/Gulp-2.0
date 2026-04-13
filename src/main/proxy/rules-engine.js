@@ -10,7 +10,7 @@ const MAX_REGEX_LENGTH = 512;
 const SAFE_FLAGS_PATTERN = /^[imsu]{0,4}$/;
 
 function clone(value) {
-	return JSON.parse(JSON.stringify(value));
+	return structuredClone(value);
 }
 
 function asString(value) {
@@ -152,7 +152,7 @@ function applyAction(request, action = {}) {
 	}
 
 	if (type === 'replace') {
-		const hasFind = Object.prototype.hasOwnProperty.call(action, 'find');
+		const hasFind = Object.hasOwn(action, 'find');
 		next[target] = hasFind
 			? replaceInField(current, action.find, action.replace)
 			: asString(action.value || '');
@@ -184,7 +184,7 @@ function isRegexConditionSafe(condition) {
 }
 
 function validateRuleConditions(rule) {
-	const match = rule && rule.match ? rule.match : {};
+	const match = rule?.match || {};
 	const fieldConditions = [match.host, match.path, match.url, match.body].filter(Boolean);
 	for (const cond of fieldConditions) {
 		if (!isRegexConditionSafe(cond)) {
@@ -214,7 +214,7 @@ class RulesEngine {
 
 	setRules(rules = []) {
 		if (!Array.isArray(rules)) {
-			throw new Error('setRules requires an array of rule definitions');
+			throw new TypeError('setRules requires an array of rule definitions');
 		}
 		const accepted = [];
 		const rejected = [];
@@ -239,6 +239,16 @@ class RulesEngine {
 		return clone(this.rules);
 	}
 
+	getActions(rule) {
+		if (Array.isArray(rule.actions)) {
+			return rule.actions;
+		}
+		if (rule.action) {
+			return [rule.action];
+		}
+		return [];
+	}
+
 	applyToRequest(request) {
 		let next = clone(request || {});
 
@@ -251,9 +261,7 @@ class RulesEngine {
 				continue;
 			}
 
-			const actions = Array.isArray(rule.actions)
-				? rule.actions
-				: (rule.action ? [rule.action] : []);
+			const actions = this.getActions(rule);
 
 			for (const action of actions) {
 				next = applyAction(next, action);

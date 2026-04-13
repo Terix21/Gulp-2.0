@@ -20,7 +20,7 @@ const DEFAULT_SECURITY_PREFERENCES = Object.freeze({
 });
 
 function clone(value) {
-	return JSON.parse(JSON.stringify(value));
+	return structuredClone(value);
 }
 
 function clampNumber(value, fallback = 0) {
@@ -73,7 +73,7 @@ class EmbeddedBrowserService extends EventEmitter {
 		this.getProxyStatus = options.getProxyStatus;
 		this.startProxy = options.startProxy;
 		this.hostModel = String(options.hostModel || DEFAULT_BROWSER_HOST_MODEL);
-		this.allowedSchemes = Array.isArray(options.allowedSchemes) && options.allowedSchemes.length > 0
+		this.allowedSchemes = Array.isArray(options.allowedSchemes) && options.allowedSchemes?.length > 0
 			? options.allowedSchemes.map(value => String(value || '').toLowerCase())
 			: [...DEFAULT_ALLOWED_SCHEMES];
 		this.securityPreferences = {
@@ -243,7 +243,7 @@ class EmbeddedBrowserService extends EventEmitter {
 	failRuntimeNavigation({ sessionId, url, error } = {}) {
 		const session = this.getSessionRecord(sessionId);
 		session.loading = false;
-		session.lastError = error && error.message ? error.message : 'Navigation failed.';
+		session.lastError = error?.message || 'Navigation failed.';
 		if (typeof url === 'string' && url) {
 			session.currentUrl = url;
 		}
@@ -288,11 +288,11 @@ class EmbeddedBrowserService extends EventEmitter {
 
 	async ensureProxyReady() {
 		if (typeof this.getProxyStatus !== 'function' || typeof this.startProxy !== 'function') {
-			throw new Error('Embedded browser proxy adapters are not configured');
+			throw new TypeError('Embedded browser proxy adapters are not configured');
 		}
 
 		const status = await this.getProxyStatus();
-		if (status && status.running && Number.isInteger(status.port) && status.port > 0) {
+		if (status?.running && Number.isInteger(status?.port) && status.port > 0) {
 			return status.port;
 		}
 

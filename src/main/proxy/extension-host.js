@@ -52,7 +52,7 @@ function asArray(value) {
 }
 
 function clone(value) {
-	return JSON.parse(JSON.stringify(value));
+	return structuredClone(value);
 }
 
 function ensureDir(targetPath) {
@@ -60,7 +60,7 @@ function ensureDir(targetPath) {
 }
 
 function normalizePermissions(permissions) {
-	return [...new Set(asArray(permissions).map(item => toText(item).trim()).filter(Boolean))].sort();
+	return [...new Set(asArray(permissions).map(item => toText(item).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
 function sanitizeManifest(manifest = {}, fallbackId = '') {
@@ -140,7 +140,7 @@ class ExtensionHost extends EventEmitter {
 				sourceType: ext.sourceType,
 				permissions: ext.permissions,
 				approvedPermissions: ext.approvedPermissions,
-				subscriptions: Array.from(new Set(ext.subscriptions.values())).sort(),
+			subscriptions: Array.from(new Set(ext.subscriptions.values())).sort((a, b) => a.localeCompare(b)),
 				installPath: ext.installPath,
 			})),
 			auditLog: this.auditLog.slice(0, 200),
@@ -215,7 +215,7 @@ class ExtensionHost extends EventEmitter {
 
 	buildScriptExtension(args = {}) {
 		const name = toText(args.name || 'Custom Script').trim() || 'Custom Script';
-		const defaultId = `script.${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.${Date.now()}`;
+		const defaultId = `script.${name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}.${Date.now()}`;
 		const id = toText(args.id || defaultId).trim();
 		validateExtensionId(id, 'Script extension id');
 		const version = toText(args.version || '1.0.0');
@@ -321,7 +321,7 @@ class ExtensionHost extends EventEmitter {
 					throw new Error(`Unsupported event subscription: ${normalizedEvent}`);
 				}
 				if (typeof handler !== 'function') {
-					throw new Error('Subscription handler must be a function.');
+					throw new TypeError('Subscription handler must be a function.');
 				}
 
 				const permissionByEvent = {
@@ -458,9 +458,9 @@ class ExtensionHost extends EventEmitter {
 				type: 'lifecycle',
 				action: 'install',
 				status: 'error',
-				message: error && error.message ? error.message : 'Install failed',
+				message: error?.message || 'Install failed',
 			});
-			return { ok: false, id: toText(args.id || ''), error: error && error.message ? error.message : 'Install failed' };
+			return { ok: false, id: toText(args.id || ''), error: error?.message || 'Install failed' };
 		}
 	}
 
@@ -473,7 +473,7 @@ class ExtensionHost extends EventEmitter {
 		this.extensions.delete(id);
 
 		try {
-			if (extension && extension.runtime && typeof extension.runtime.deactivate === 'function') {
+			if (typeof extension?.runtime?.deactivate === 'function') {
 				extension.runtime.sandbox.__deactivate = extension.runtime.deactivate;
 				const deactivateScript = new vm.Script('__deactivate();');
 				deactivateScript.runInContext(extension.runtime.context, { timeout: this.executionTimeoutMs });
@@ -482,7 +482,7 @@ class ExtensionHost extends EventEmitter {
 			// Ignore deactivate errors during uninstall and continue cleanup.
 		}
 
-		if (extension && extension.installPath && extension.installPath.startsWith(this.extensionsDir)) {
+		if (extension?.installPath?.startsWith(this.extensionsDir)) {
 			fs.rmSync(extension.installPath, { recursive: true, force: true });
 		}
 
@@ -515,6 +515,35 @@ class ExtensionHost extends EventEmitter {
 		return { ok: true };
 	}
 
+	dispatchSubscriptionHandler(extension, handlerId, normalizedEvent, safePayload) {
+		try {
+			extension.runtime.sandbox.__payload = safePayload;
+			const dispatchScript = new vm.Script(`
+				if (typeof __handlers[${JSON.stringify(handlerId)}] === 'function') {
+					__handlers[${JSON.stringify(handlerId)}](__payload);
+				}
+			`);
+			dispatchScript.runInContext(extension.runtime.context, { timeout: this.executionTimeoutMs });
+			this.addAudit({
+				extensionId: extension.id,
+				type: 'event',
+				action: normalizedEvent,
+				status: 'ok',
+				message: 'Event processed',
+			});
+			return 1;
+		} catch (error) {
+			this.addAudit({
+				extensionId: extension.id,
+				type: 'event',
+				action: normalizedEvent,
+				status: 'error',
+				message: error?.message || 'Event execution failed',
+			});
+			return 0;
+		}
+	}
+
 	emitEvent(eventName, payload = {}) {
 		const normalizedEvent = toText(eventName).trim();
 		if (!this.allowedEvents.has(normalizedEvent)) {
@@ -525,7 +554,7 @@ class ExtensionHost extends EventEmitter {
 		const safePayload = payload && typeof payload === 'object' ? clone(payload) : { value: payload };
 
 		for (const extension of this.extensions.values()) {
-			if (!extension.enabled) {
+			if (!extension.enabled || !extension.runtime || !extension.subscriptions) {
 				continue;
 			}
 
@@ -533,32 +562,7 @@ class ExtensionHost extends EventEmitter {
 				if (subscribedEvent !== normalizedEvent) {
 					continue;
 				}
-
-				try {
-					extension.runtime.sandbox.__payload = safePayload;
-					const dispatchScript = new vm.Script(`
-						if (typeof __handlers[${JSON.stringify(handlerId)}] === 'function') {
-							__handlers[${JSON.stringify(handlerId)}](__payload);
-						}
-					`);
-					dispatchScript.runInContext(extension.runtime.context, { timeout: this.executionTimeoutMs });
-					delivered += 1;
-					this.addAudit({
-						extensionId: extension.id,
-						type: 'event',
-						action: normalizedEvent,
-						status: 'ok',
-						message: 'Event processed',
-					});
-				} catch (error) {
-					this.addAudit({
-						extensionId: extension.id,
-						type: 'event',
-						action: normalizedEvent,
-						status: 'error',
-						message: error && error.message ? error.message : 'Event execution failed',
-					});
-				}
+				delivered += this.dispatchSubscriptionHandler(extension, handlerId, normalizedEvent, safePayload);
 			}
 		}
 
