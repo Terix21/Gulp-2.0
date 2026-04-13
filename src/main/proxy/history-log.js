@@ -8,10 +8,7 @@ SEN-014 History logging
 
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
+const { clone } = require('./http-utils');
 
 function matchesFilter(item, filter = {}) {
 	const request = item.request || {};

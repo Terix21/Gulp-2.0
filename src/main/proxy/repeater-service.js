@@ -9,10 +9,7 @@ SEN-016 Repeater service
 
 const { randomUUID } = require('node:crypto');
 const { forwardRequest } = require('./protocol-support');
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
+const { clone } = require('./http-utils');
 
 /**
  * Strip rawBody (Buffer) before storing — keep rawBodyBase64 instead.
@@ -23,8 +20,8 @@ function sanitiseResponse(response) {
 	if (!response) {
 		return null;
 	}
-	const { rawBody, ...rest } = response;
-	void rawBody;
+	const rest = { ...response };
+	delete rest.rawBody;
 	return rest;
 }
 
@@ -110,8 +107,8 @@ class RepeaterService {
 	}
 
 	_entryWithoutSends(entry) {
-		const { sends, ...rest } = entry;
-		void sends;
+		const rest = { ...entry };
+		delete rest.sends;
 		return clone(rest);
 	}
 }

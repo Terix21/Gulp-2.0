@@ -38,6 +38,9 @@ module.exports = defineConfig({
         vite: {
           build: {
             outDir: path.resolve(__dirname, 'dist', 'main'),
+            rollupOptions: {
+              external: ['./extension-ipc-install', './renderer-console'],
+            },
           },
         },
       },
@@ -61,6 +64,10 @@ module.exports = defineConfig({
         },
         {
           src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'renderer-console.js')),
+          dest: '../main',
+        },
+        {
+          src: toPosixPath(path.resolve(__dirname, 'src', 'main', 'extension-ipc-install.js')),
           dest: '../main',
         },
         {

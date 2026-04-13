@@ -10,10 +10,7 @@ SEN-022 OOB callback tracking
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
+const { clone } = require('./http-utils');
 
 function normalizeKind(kind) {
 	const value = String(kind || 'http').toLowerCase();
@@ -24,7 +21,7 @@ function normalizeKind(kind) {
 }
 
 function tokenFromPath(pathname) {
-	const clean = String(pathname || '').replace(/^\/+/, '');
+	const clean = String(pathname || '').replaceAll(/^\/+/g, '');
 	const [first] = clean.split('/');
 	return first || '';
 }
@@ -70,7 +67,7 @@ class OobService extends EventEmitter {
 					payloadId: payload.id,
 					kind: payload.kind,
 					token,
-					source: req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : 'unknown',
+					source: req.socket?.remoteAddress || 'unknown',
 					requestPath: req.url || '/',
 					requestMethod: req.method || 'GET',
 					correlation: payload.correlation || {},
@@ -94,7 +91,7 @@ class OobService extends EventEmitter {
 	async createPayload(args = {}) {
 		const kind = normalizeKind(args.type);
 		const id = randomUUID();
-		const token = randomUUID().replace(/-/g, '').slice(0, 18);
+		const token = randomUUID().split('-').join('').slice(0, 18);
 		const port = await this.ensureListener();
 		const url = `http://${this.listenerHost}:${port}/${token}`;
 

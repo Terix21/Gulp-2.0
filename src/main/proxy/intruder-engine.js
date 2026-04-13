@@ -12,24 +12,14 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
 const { forwardRequest } = require('./protocol-support');
+const { clone, splitLines } = require('./http-utils');
+const { MAX_DICTIONARY_FILE_BYTES } = require('./limits');
 
 const MAX_GENERATED_PAYLOADS = 250;
 const MAX_ATTACK_REQUESTS = 500;
-const MAX_DICTIONARY_FILE_BYTES = 2 * 1024 * 1024;
 // Only plain-text line-based formats are valid dictionary sources.
 const DICTIONARY_EXTENSIONS = new Set(['.txt', '.csv', '.lst', '.log', '']);
 const MARKER_REGEX = /§([^§]*)§/g;
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
-
-function splitLines(text) {
-	return String(text || '')
-		.split(/\r?\n/g)
-		.map(line => line.trim())
-		.filter(Boolean);
-}
 
 function normalizeRequestTemplate(request = {}) {
 	if (!request || typeof request !== 'object') {
@@ -71,10 +61,11 @@ function collectMarkersFromString(field, value, extra = {}) {
 }
 
 function detectTemplatePositions(requestTemplate) {
-	const markers = [];
-	markers.push(...collectMarkersFromString('url', requestTemplate.url));
-	markers.push(...collectMarkersFromString('path', requestTemplate.path));
-	markers.push(...collectMarkersFromString('body', requestTemplate.body));
+	const markers = [
+		...collectMarkersFromString('url', requestTemplate.url),
+		...collectMarkersFromString('path', requestTemplate.path),
+		...collectMarkersFromString('body', requestTemplate.body),
+	];
 
 	for (const [headerName, headerValue] of Object.entries(requestTemplate.headers || {})) {
 		markers.push(...collectMarkersFromString('header', String(headerValue), { headerName }));
@@ -141,7 +132,7 @@ function buildSequentialPayloads(source = {}) {
 
 function buildDictionaryPayloads(source = {}) {
 	if (Array.isArray(source.items) && source.items.length > 0) {
-		return source.items.map(item => String(item));
+		return source.items.map(String);
 	}
 
 	if (source.filePath) {
@@ -199,10 +190,10 @@ function replaceMarkers(value, tokens, assignments) {
 	}
 
 	let markerIndex = 0;
-	return value.replace(MARKER_REGEX, (_fullMatch, inner) => {
+	return value.replaceAll(MARKER_REGEX, (_fullMatch, inner) => {
 		const token = tokens[markerIndex];
 		markerIndex += 1;
-		if (token && Object.prototype.hasOwnProperty.call(assignments, token.id)) {
+		if (token && Object.hasOwn(assignments, token.id)) {
 			return String(assignments[token.id]);
 		}
 		return inner;
@@ -255,7 +246,7 @@ function buildAnomaly(result, baseline) {
 
 function createVirtualPosition(rawConfig = {}) {
 	const payloads = Array.isArray(rawConfig.payloads) && rawConfig.payloads.length > 0
-		? rawConfig.payloads.map(value => String(value))
+		? rawConfig.payloads.map(String)
 		: ['default'];
 
 	return [{
@@ -284,7 +275,7 @@ function normalizeAttackConfig(rawConfig = {}) {
 		normalizedPositions = detectedPositions.map((position, index) => {
 			const rawPosition = Array.isArray(rawConfig.positions) ? rawConfig.positions[index] || {} : {};
 			const fallbackItems = Array.isArray(rawConfig.payloads) && rawConfig.payloads.length > 0
-				? rawConfig.payloads.map(value => String(value))
+				? rawConfig.payloads.map(String)
 				: [position.defaultValue || 'test'];
 			const source = rawPosition.source || { type: 'dictionary', items: fallbackItems };
 			return {
@@ -433,8 +424,147 @@ class IntruderEngine extends EventEmitter {
 
 		this.attackById.set(attackId, attack);
 		this.resultsByAttackId.set(attackId, []);
-		void this.runAttack(attackId, clone(config), variants);
+		this.runAttack(attackId, clone(config), variants).catch(error => {
+			const current = this.attackById.get(attackId);
+			if (!current) {
+				return;
+			}
+			current.status = 'failed';
+			current.updatedAt = Date.now();
+			this.attackById.set(attackId, current);
+			this.emit('progress', {
+				attackId,
+				sent: current.sent,
+				total: current.total,
+				lastResult: null,
+				status: 'failed',
+				error: error?.message || 'Attack execution failed',
+			});
+		});
 		return { attackId };
+	}
+
+	buildOutOfScopeResult(attackId, index, variant, request) {
+		return {
+			id: randomUUID(),
+			attackId,
+			position: index,
+			payload: variant.payloadSummary,
+			payloads: clone(variant.assignments),
+			statusCode: 0,
+			length: 0,
+			duration: 0,
+			isAnomalous: false,
+			anomalyReasons: ['out-of-scope'],
+			data: {
+				requestSummary: summarizeRequest(request),
+				skipped: true,
+				reason: 'out-of-scope',
+			},
+		};
+	}
+
+	async executeVariantRequest(config, request, startedAt) {
+		if (config.simulateOnly) {
+			return {
+				statusCode: 200,
+				statusMessage: 'Simulated',
+				bodyLength: 0,
+				contentType: 'text/plain',
+				timings: { total: 0 },
+			};
+		}
+
+		return this.forwardRequest({
+			id: randomUUID(),
+			connectionId: randomUUID(),
+			...request,
+		});
+	}
+
+	buildResultFromResponse(attackId, index, variant, request, response, baseline, startedAt) {
+		const duration = response.timings ? response.timings.total : (Date.now() - startedAt);
+		const baseMetrics = baseline || {
+			statusCode: response.statusCode,
+			length: response.bodyLength,
+			duration,
+		};
+		const anomaly = buildAnomaly({
+			statusCode: response.statusCode,
+			length: response.bodyLength,
+			duration,
+			data: {},
+		}, baseline);
+
+		const result = {
+			id: randomUUID(),
+			attackId,
+			position: index,
+			payload: variant.payloadSummary,
+			payloads: clone(variant.assignments),
+			statusCode: response.statusCode,
+			length: response.bodyLength,
+			duration,
+			isAnomalous: anomaly.isAnomalous,
+			anomalyReasons: anomaly.reasons,
+			data: {
+				requestSummary: summarizeRequest(request),
+				contentType: response.contentType,
+				statusMessage: response.statusMessage,
+				baseline: baseMetrics,
+			},
+		};
+
+		if (!baseline) {
+			result.isAnomalous = false;
+			result.anomalyReasons = [];
+		}
+
+		return { result, nextBaseline: baseline || baseMetrics };
+	}
+
+	buildFailedResult(attackId, index, variant, request, error, startedAt) {
+		return {
+			id: randomUUID(),
+			attackId,
+			position: index,
+			payload: variant.payloadSummary,
+			payloads: clone(variant.assignments),
+			statusCode: 0,
+			length: 0,
+			duration: Date.now() - startedAt,
+			isAnomalous: true,
+			anomalyReasons: ['request failed'],
+			data: {
+				requestSummary: summarizeRequest(request),
+				error: error?.message || 'request failed',
+			},
+		};
+	}
+
+	updateAttackProgress(attackId, result) {
+		const results = this.resultsByAttackId.get(attackId) || [];
+		results.push(result);
+		this.resultsByAttackId.set(attackId, results);
+
+		const attack = this.attackById.get(attackId);
+		if (!attack) {
+			return false;
+		}
+
+		attack.sent = results.length;
+		attack.updatedAt = Date.now();
+		attack.anomalousCount = results.filter(item => item.isAnomalous).length;
+		this.attackById.set(attackId, attack);
+
+		this.emit('progress', {
+			attackId,
+			sent: attack.sent,
+			total: attack.total,
+			lastResult: clone(result),
+		});
+
+		return true;
 	}
 
 	async runAttack(attackId, config, variants) {
@@ -449,113 +579,22 @@ class IntruderEngine extends EventEmitter {
 			const request = applyAssignmentsToRequest(config.requestTemplate, config.positions, variant.assignments);
 			const startedAt = Date.now();
 			let result;
-
 			if (this.scopeEvaluator && !this.scopeEvaluator(request)) {
-				result = {
-					id: randomUUID(),
-					attackId,
-					position: index,
-					payload: variant.payloadSummary,
-					payloads: clone(variant.assignments),
-					statusCode: 0,
-					length: 0,
-					duration: 0,
-					isAnomalous: false,
-					anomalyReasons: ['out-of-scope'],
-					data: {
-						requestSummary: summarizeRequest(request),
-						skipped: true,
-						reason: 'out-of-scope',
-					},
-				};
+				result = this.buildOutOfScopeResult(attackId, index, variant, request);
 			} else {
-
-			try {
-				const response = config.simulateOnly
-					? {
-						statusCode: 200,
-						statusMessage: 'Simulated',
-						bodyLength: 0,
-						contentType: 'text/plain',
-						timings: { total: 0 },
-					}
-					: await this.forwardRequest({
-						id: randomUUID(),
-						connectionId: randomUUID(),
-						...request,
-					});
-
-				const baseMetrics = baseline || {
-					statusCode: response.statusCode,
-					length: response.bodyLength,
-					duration: response.timings ? response.timings.total : (Date.now() - startedAt),
-				};
-				const anomaly = buildAnomaly({
-					statusCode: response.statusCode,
-					length: response.bodyLength,
-					duration: response.timings ? response.timings.total : (Date.now() - startedAt),
-					data: {},
-				}, baseline);
-
-				result = {
-					id: randomUUID(),
-					attackId,
-					position: index,
-					payload: variant.payloadSummary,
-					payloads: clone(variant.assignments),
-					statusCode: response.statusCode,
-					length: response.bodyLength,
-					duration: response.timings ? response.timings.total : (Date.now() - startedAt),
-					isAnomalous: anomaly.isAnomalous,
-					anomalyReasons: anomaly.reasons,
-					data: {
-						requestSummary: summarizeRequest(request),
-						contentType: response.contentType,
-						statusMessage: response.statusMessage,
-						baseline: baseMetrics,
-					},
-				};
-
-				if (!baseline) {
-					baseline = baseMetrics;
-					result.isAnomalous = false;
-					result.anomalyReasons = [];
+				try {
+					const response = await this.executeVariantRequest(config, request, startedAt);
+					const responseResult = this.buildResultFromResponse(attackId, index, variant, request, response, baseline, startedAt);
+					result = responseResult.result;
+					baseline = responseResult.nextBaseline;
+				} catch (error) {
+					result = this.buildFailedResult(attackId, index, variant, request, error, startedAt);
 				}
-			} catch (error) {
-				result = {
-					id: randomUUID(),
-					attackId,
-					position: index,
-					payload: variant.payloadSummary,
-					payloads: clone(variant.assignments),
-					statusCode: 0,
-					length: 0,
-					duration: Date.now() - startedAt,
-					isAnomalous: true,
-					anomalyReasons: ['request failed'],
-					data: {
-						requestSummary: summarizeRequest(request),
-						error: error.message,
-					},
-				};
-			}
 			}
 
-			const results = this.resultsByAttackId.get(attackId) || [];
-			results.push(result);
-			this.resultsByAttackId.set(attackId, results);
-
-			attack.sent = results.length;
-			attack.updatedAt = Date.now();
-			attack.anomalousCount = results.filter(item => item.isAnomalous).length;
-			this.attackById.set(attackId, attack);
-
-			this.emit('progress', {
-				attackId,
-				sent: attack.sent,
-				total: attack.total,
-				lastResult: clone(result),
-			});
+			if (!this.updateAttackProgress(attackId, result)) {
+				break;
+			}
 		}
 
 		const attack = this.attackById.get(attackId);

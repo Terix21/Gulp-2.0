@@ -13,9 +13,12 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { randomUUID } = require('node:crypto');
 const { EventEmitter } = require('node:events');
+const { clone, toText, asArray } = require('./http-utils');
 
 const MAX_AUDIT_ITEMS = 500;
 const DEFAULT_TIMEOUT_MS = 150;
+const DEFAULT_EVENT_WINDOW_MS = 1000;
+const DEFAULT_EVENT_BUDGET_PER_WINDOW = 100;
 const DEFAULT_ALLOWED_PERMISSIONS = [
 	'proxy.intercept.read',
 	'scanner.finding.read',
@@ -29,16 +32,6 @@ const DEFAULT_ALLOWED_EVENTS = [
 	'scope.transition',
 ];
 
-function toText(value) {
-	if (typeof value === 'string') {
-		return value;
-	}
-	if (value == null) {
-		return '';
-	}
-	return String(value);
-}
-
 const EXTENSION_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 
 function validateExtensionId(id, label) {
@@ -47,20 +40,12 @@ function validateExtensionId(id, label) {
 	}
 }
 
-function asArray(value) {
-	return Array.isArray(value) ? value : [];
-}
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
-
 function ensureDir(targetPath) {
 	fs.mkdirSync(targetPath, { recursive: true });
 }
 
 function normalizePermissions(permissions) {
-	return [...new Set(asArray(permissions).map(item => toText(item).trim()).filter(Boolean))].sort();
+	return [...new Set(asArray(permissions).map(item => toText(item).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
 function sanitizeManifest(manifest = {}, fallbackId = '') {
@@ -82,14 +67,30 @@ function hasPermission(permissionSet, permissionName) {
 	return permissionSet.has(permissionName);
 }
 
+function normalizeRootPaths(paths) {
+	return [...new Set(asArray(paths)
+		.map(item => toText(item).trim())
+		.filter(Boolean)
+		.map(item => path.resolve(item)))].sort((a, b) => a.localeCompare(b));
+}
+
+function isPathWithin(basePath, candidatePath) {
+	const relative = path.relative(path.resolve(basePath), path.resolve(candidatePath));
+	return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
 class ExtensionHost extends EventEmitter {
 	constructor(options = {}) {
 		super();
 		this.extensionsDir = path.resolve(options.extensionsDir || path.join(process.cwd(), 'extensions'));
 		this.executionTimeoutMs = Number(options.executionTimeoutMs || DEFAULT_TIMEOUT_MS);
+		this.eventWindowMs = Number(options.eventWindowMs || DEFAULT_EVENT_WINDOW_MS);
+		this.eventBudgetPerWindow = Number(options.eventBudgetPerWindow || DEFAULT_EVENT_BUDGET_PER_WINDOW);
+		this.trustedPackageRoots = normalizeRootPaths(options.trustedPackageRoots);
 		this.allowedPermissions = new Set(options.allowedPermissions || DEFAULT_ALLOWED_PERMISSIONS);
 		this.allowedEvents = new Set(options.allowedEvents || DEFAULT_ALLOWED_EVENTS);
 		this.extensions = new Map();
+		this.eventCounters = new Map();
 		this.auditLog = [];
 	}
 
@@ -99,6 +100,15 @@ class ExtensionHost extends EventEmitter {
 		}
 		if (Number.isFinite(options.executionTimeoutMs) && Number(options.executionTimeoutMs) > 0) {
 			this.executionTimeoutMs = Number(options.executionTimeoutMs);
+		}
+		if (Number.isFinite(options.eventWindowMs) && Number(options.eventWindowMs) > 0) {
+			this.eventWindowMs = Number(options.eventWindowMs);
+		}
+		if (Number.isFinite(options.eventBudgetPerWindow) && Number(options.eventBudgetPerWindow) > 0) {
+			this.eventBudgetPerWindow = Number(options.eventBudgetPerWindow);
+		}
+		if (Array.isArray(options.trustedPackageRoots)) {
+			this.trustedPackageRoots = normalizeRootPaths(options.trustedPackageRoots);
 		}
 		if (Array.isArray(options.allowedPermissions)) {
 			this.allowedPermissions = new Set(options.allowedPermissions.map(item => toText(item).trim()).filter(Boolean));
@@ -140,7 +150,7 @@ class ExtensionHost extends EventEmitter {
 				sourceType: ext.sourceType,
 				permissions: ext.permissions,
 				approvedPermissions: ext.approvedPermissions,
-				subscriptions: Array.from(new Set(ext.subscriptions.values())).sort(),
+			subscriptions: Array.from(new Set(ext.subscriptions.values())).sort((a, b) => a.localeCompare(b)),
 				installPath: ext.installPath,
 			})),
 			auditLog: this.auditLog.slice(0, 200),
@@ -167,6 +177,16 @@ class ExtensionHost extends EventEmitter {
 		const sourcePath = path.resolve(toText(packagePath).trim());
 		const stat = fs.statSync(sourcePath);
 		const sourceDir = stat.isDirectory() ? sourcePath : path.dirname(sourcePath);
+		// Canonicalize via realpathSync so symlinks are resolved before the
+		// trusted-root check — prevents a symlink inside a root from pointing
+		// to an untrusted directory and bypassing the constraint.
+		const canonicalDir = fs.realpathSync(sourceDir);
+		if (
+			this.trustedPackageRoots.length > 0
+			&& !this.trustedPackageRoots.some(root => isPathWithin(root, canonicalDir))
+		) {
+			throw new Error('Package path is outside configured trusted package roots.');
+		}
 
 		const manifestPath = path.join(sourceDir, 'extension.json');
 		if (!fs.existsSync(manifestPath)) {
@@ -215,7 +235,7 @@ class ExtensionHost extends EventEmitter {
 
 	buildScriptExtension(args = {}) {
 		const name = toText(args.name || 'Custom Script').trim() || 'Custom Script';
-		const defaultId = `script.${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.${Date.now()}`;
+		const defaultId = `script.${name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}.${Date.now()}`;
 		const id = toText(args.id || defaultId).trim();
 		validateExtensionId(id, 'Script extension id');
 		const version = toText(args.version || '1.0.0');
@@ -321,7 +341,7 @@ class ExtensionHost extends EventEmitter {
 					throw new Error(`Unsupported event subscription: ${normalizedEvent}`);
 				}
 				if (typeof handler !== 'function') {
-					throw new Error('Subscription handler must be a function.');
+					throw new TypeError('Subscription handler must be a function.');
 				}
 
 				const permissionByEvent = {
@@ -384,7 +404,21 @@ class ExtensionHost extends EventEmitter {
 		const installScript = new vm.Script(extensionMeta.code, {
 			filename: `${extensionMeta.id}.js`,
 		});
+		this.addAudit({
+			extensionId: extensionMeta.id,
+			type: 'security',
+			action: 'vm.install.execute',
+			status: 'start',
+			message: 'Executing extension install script in VM sandbox.',
+		});
 		installScript.runInContext(context, { timeout: this.executionTimeoutMs });
+		this.addAudit({
+			extensionId: extensionMeta.id,
+			type: 'security',
+			action: 'vm.install.execute',
+			status: 'ok',
+			message: 'Extension install script execution completed.',
+		});
 
 		const exportsObj = sandbox.module.exports || {};
 		if (typeof exportsObj.activate === 'function') {
@@ -398,7 +432,21 @@ class ExtensionHost extends EventEmitter {
 					__activationError = err && err.message ? err.message : String(err);
 				}
 			`);
+			this.addAudit({
+				extensionId: extensionMeta.id,
+				type: 'security',
+				action: 'vm.activate.execute',
+				status: 'start',
+				message: 'Executing extension activation in VM sandbox.',
+			});
 			activateScript.runInContext(context, { timeout: this.executionTimeoutMs });
+			this.addAudit({
+				extensionId: extensionMeta.id,
+				type: 'security',
+				action: 'vm.activate.execute',
+				status: 'ok',
+				message: 'Extension activation completed.',
+			});
 			if (sandbox.__activationError) {
 				throw new Error(sandbox.__activationError);
 			}
@@ -458,9 +506,9 @@ class ExtensionHost extends EventEmitter {
 				type: 'lifecycle',
 				action: 'install',
 				status: 'error',
-				message: error && error.message ? error.message : 'Install failed',
+				message: error?.message || 'Install failed',
 			});
-			return { ok: false, id: toText(args.id || ''), error: error && error.message ? error.message : 'Install failed' };
+			return { ok: false, id: toText(args.id || ''), error: error?.message || 'Install failed' };
 		}
 	}
 
@@ -473,7 +521,7 @@ class ExtensionHost extends EventEmitter {
 		this.extensions.delete(id);
 
 		try {
-			if (extension && extension.runtime && typeof extension.runtime.deactivate === 'function') {
+			if (typeof extension?.runtime?.deactivate === 'function') {
 				extension.runtime.sandbox.__deactivate = extension.runtime.deactivate;
 				const deactivateScript = new vm.Script('__deactivate();');
 				deactivateScript.runInContext(extension.runtime.context, { timeout: this.executionTimeoutMs });
@@ -482,9 +530,10 @@ class ExtensionHost extends EventEmitter {
 			// Ignore deactivate errors during uninstall and continue cleanup.
 		}
 
-		if (extension && extension.installPath && extension.installPath.startsWith(this.extensionsDir)) {
+		if (extension?.installPath?.startsWith(this.extensionsDir)) {
 			fs.rmSync(extension.installPath, { recursive: true, force: true });
 		}
+		this.eventCounters.delete(id);
 
 		this.addAudit({
 			extensionId: id,
@@ -515,6 +564,82 @@ class ExtensionHost extends EventEmitter {
 		return { ok: true };
 	}
 
+	dispatchSubscriptionHandler(extension, handlerId, normalizedEvent, safePayload) {
+		try {
+			extension.runtime.sandbox.__payload = safePayload;
+			const dispatchScript = new vm.Script(`
+				if (typeof __handlers[${JSON.stringify(handlerId)}] === 'function') {
+					__handlers[${JSON.stringify(handlerId)}](__payload);
+				}
+			`);
+			dispatchScript.runInContext(extension.runtime.context, { timeout: this.executionTimeoutMs });
+			this.addAudit({
+				extensionId: extension.id,
+				type: 'event',
+				action: normalizedEvent,
+				status: 'ok',
+				message: 'Event processed',
+			});
+			return 1;
+		} catch (error) {
+			this.addAudit({
+				extensionId: extension.id,
+				type: 'event',
+				action: normalizedEvent,
+				status: 'error',
+				message: error?.message || 'Event execution failed',
+			});
+			return 0;
+		}
+	}
+
+	hasMatchingSubscription(extension, normalizedEvent) {
+		for (const subscribedEvent of extension.subscriptions.values()) {
+			if (subscribedEvent === normalizedEvent) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	deliverEventToExtension(extension, normalizedEvent, safePayload) {
+		if (!this.canProcessEvent(extension.id)) {
+			this.addAudit({
+				extensionId: extension.id,
+				type: 'security',
+				action: normalizedEvent,
+				status: 'error',
+				message: 'Event dropped due to extension rate limit.',
+			});
+			return 0;
+		}
+
+		let delivered = 0;
+		for (const [handlerId, subscribedEvent] of extension.subscriptions.entries()) {
+			if (subscribedEvent !== normalizedEvent) {
+				continue;
+			}
+			delivered += this.dispatchSubscriptionHandler(extension, handlerId, normalizedEvent, safePayload);
+		}
+
+		return delivered;
+	}
+
+	canProcessEvent(extensionId) {
+		if (!extensionId) {
+			return false;
+		}
+		const now = Date.now();
+		const existing = this.eventCounters.get(extensionId) || { windowStart: now, count: 0 };
+		if ((now - existing.windowStart) >= this.eventWindowMs) {
+			existing.windowStart = now;
+			existing.count = 0;
+		}
+		existing.count += 1;
+		this.eventCounters.set(extensionId, existing);
+		return existing.count <= this.eventBudgetPerWindow;
+	}
+
 	emitEvent(eventName, payload = {}) {
 		const normalizedEvent = toText(eventName).trim();
 		if (!this.allowedEvents.has(normalizedEvent)) {
@@ -525,41 +650,15 @@ class ExtensionHost extends EventEmitter {
 		const safePayload = payload && typeof payload === 'object' ? clone(payload) : { value: payload };
 
 		for (const extension of this.extensions.values()) {
-			if (!extension.enabled) {
+			if (!extension.enabled || !extension.runtime || !extension.subscriptions) {
 				continue;
 			}
 
-			for (const [handlerId, subscribedEvent] of extension.subscriptions.entries()) {
-				if (subscribedEvent !== normalizedEvent) {
-					continue;
-				}
-
-				try {
-					extension.runtime.sandbox.__payload = safePayload;
-					const dispatchScript = new vm.Script(`
-						if (typeof __handlers[${JSON.stringify(handlerId)}] === 'function') {
-							__handlers[${JSON.stringify(handlerId)}](__payload);
-						}
-					`);
-					dispatchScript.runInContext(extension.runtime.context, { timeout: this.executionTimeoutMs });
-					delivered += 1;
-					this.addAudit({
-						extensionId: extension.id,
-						type: 'event',
-						action: normalizedEvent,
-						status: 'ok',
-						message: 'Event processed',
-					});
-				} catch (error) {
-					this.addAudit({
-						extensionId: extension.id,
-						type: 'event',
-						action: normalizedEvent,
-						status: 'error',
-						message: error && error.message ? error.message : 'Event execution failed',
-					});
-				}
+			if (!this.hasMatchingSubscription(extension, normalizedEvent)) {
+				continue;
 			}
+
+			delivered += this.deliverEventToExtension(extension, normalizedEvent, safePayload);
 		}
 
 		return { ok: true, delivered };

@@ -8,17 +8,7 @@ SEN-014 Rules engine
 
 const MAX_REGEX_LENGTH = 512;
 const SAFE_FLAGS_PATTERN = /^[imsu]{0,4}$/;
-
-function clone(value) {
-	return JSON.parse(JSON.stringify(value));
-}
-
-function asString(value) {
-	if (value === null || value === undefined) {
-		return '';
-	}
-	return String(value);
-}
+const { clone, asString } = require('./http-utils');
 
 function matchesText(actual, condition) {
 	const text = asString(actual);
@@ -152,10 +142,12 @@ function applyAction(request, action = {}) {
 	}
 
 	if (type === 'replace') {
-		const hasFind = Object.prototype.hasOwnProperty.call(action, 'find');
-		next[target] = hasFind
-			? replaceInField(current, action.find, action.replace)
-			: asString(action.value || '');
+		const hasFind = Object.hasOwn(action ?? {}, 'find');
+		if (hasFind) {
+			next[target] = replaceInField(current, action.find, action.replace);
+			return next;
+		}
+		next[target] = asString(action.value || '');
 		return next;
 	}
 
@@ -184,14 +176,14 @@ function isRegexConditionSafe(condition) {
 }
 
 function validateRuleConditions(rule) {
-	const match = rule && rule.match ? rule.match : {};
-	const fieldConditions = [match.host, match.path, match.url, match.body].filter(Boolean);
+	const match = rule?.match ?? {};
+	const fieldConditions = [match?.host, match?.path, match?.url, match?.body].filter(Boolean);
 	for (const cond of fieldConditions) {
 		if (!isRegexConditionSafe(cond)) {
 			return false;
 		}
 	}
-	const headerConditions = Object.values(match.headers || {});
+	const headerConditions = Object.values(match?.headers || {});
 	for (const cond of headerConditions) {
 		if (!isRegexConditionSafe(cond)) {
 			return false;
@@ -208,18 +200,26 @@ class RulesEngine {
 	}
 
 	setScopeEvaluator(evaluator) {
-		this.scopeEvaluator = typeof evaluator === 'function' ? evaluator : null;
+		if (typeof evaluator === 'function') {
+			this.scopeEvaluator = evaluator;
+			return { ok: true };
+		}
+		this.scopeEvaluator = null;
 		return { ok: true };
 	}
 
 	setRules(rules = []) {
 		if (!Array.isArray(rules)) {
-			throw new Error('setRules requires an array of rule definitions');
+			throw new TypeError('setRules requires an array of rule definitions');
 		}
 		const accepted = [];
 		const rejected = [];
 		for (const rule of rules) {
-			(validateRuleConditions(rule) ? accepted : rejected).push(rule);
+			if (validateRuleConditions(rule)) {
+				accepted.push(rule);
+			} else {
+				rejected.push(rule);
+			}
 		}
 		this.rules = accepted
 			.map(rule => clone(rule))
@@ -239,6 +239,16 @@ class RulesEngine {
 		return clone(this.rules);
 	}
 
+	getActions(rule) {
+		if (Array.isArray(rule.actions)) {
+			return rule.actions;
+		}
+		if (rule.action) {
+			return [rule.action];
+		}
+		return [];
+	}
+
 	applyToRequest(request) {
 		let next = clone(request || {});
 
@@ -251,9 +261,7 @@ class RulesEngine {
 				continue;
 			}
 
-			const actions = Array.isArray(rule.actions)
-				? rule.actions
-				: (rule.action ? [rule.action] : []);
+			const actions = this.getActions(rule);
 
 			for (const action of actions) {
 				next = applyAction(next, action);

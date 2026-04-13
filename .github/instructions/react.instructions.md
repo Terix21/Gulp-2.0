@@ -92,3 +92,5 @@ react
 - Keep pure helper functions (for example filter builders and match predicates) at module scope unless they rely on component-local closure state.
 - 2026-04-12: When using native controls in JSX (`<select>`, `Box as='select'`, etc.), provide explicit accessible naming via `aria-label`, `aria-labelledby`, or `id`/`htmlFor` pairing; do not rely on nearby text only.
 - 2026-04-12: Prefer shared select styling via the Chakra theme recipe (or a shared wrapper) instead of repeating `bg/color/border/px/h` props on each select instance.
+- 2026-04-13: All interactive renderer controls must expose stable accessible names. For icon-only/symbol-only buttons (for example arrows, reload glyphs, close glyphs), always set explicit `aria-label` values (`Back`, `Forward`, `Reload`, `Stop`, etc.) so tests and assistive tech use deterministic naming independent of visual glyphs.
+- 2026-04-13: Inputs and textareas must have programmatic names (`aria-label`, `aria-labelledby`, or `id`/`htmlFor`) even when placeholders are present. Placeholders are hint text only and are not an accessible-name substitute.
