@@ -594,25 +594,25 @@ function IntruderPanel({ themeId }) {
 
                         {source.type === 'dictionary' ? (
                           <VStack align='stretch' spacing={2}>
-                            <Input size='xs' placeholder='Optional dictionary file path' value={source.filePath || ''} onChange={event => updatePositionSource(index, { filePath: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                            <Textarea size='xs' rows={4} placeholder='Or inline payloads, one per line' value={source.text || ''} onChange={event => updatePositionSource(index, { text: event.target.value })} fontFamily='mono' fontSize='xs' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Dictionary file path for ${entry.marker.label}`} placeholder='Optional dictionary file path' value={source.filePath || ''} onChange={event => updatePositionSource(index, { filePath: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Textarea size='xs' aria-label={`Inline dictionary payloads for ${entry.marker.label}`} rows={4} placeholder='Or inline payloads, one per line' value={source.text || ''} onChange={event => updatePositionSource(index, { text: event.target.value })} fontFamily='mono' fontSize='xs' color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </VStack>
                         ) : null}
 
                         {source.type === 'bruteforce' ? (
                           <HStack wrap='wrap'>
-                            <Input size='xs' maxW='160px' placeholder='Charset' value={source.charset || ''} onChange={event => updatePositionSource(index, { charset: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Min' value={source.minLength} onChange={event => updatePositionSource(index, { minLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Max' value={source.maxLength} onChange={event => updatePositionSource(index, { maxLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Brute-force charset for ${entry.marker.label}`} maxW='160px' placeholder='Charset' value={source.charset || ''} onChange={event => updatePositionSource(index, { charset: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Brute-force minimum length for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Min' value={source.minLength} onChange={event => updatePositionSource(index, { minLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Brute-force maximum length for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Max' value={source.maxLength} onChange={event => updatePositionSource(index, { maxLength: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </HStack>
                         ) : null}
 
                         {source.type === 'sequential' ? (
                           <HStack wrap='wrap'>
-                            <Input size='xs' maxW='100px' type='number' placeholder='Start' value={source.start} onChange={event => updatePositionSource(index, { start: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='End' value={source.end} onChange={event => updatePositionSource(index, { end: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Step' value={source.step} onChange={event => updatePositionSource(index, { step: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                            <Input size='xs' maxW='100px' type='number' placeholder='Pad' value={source.padTo} onChange={event => updatePositionSource(index, { padTo: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential start value for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Start' value={source.start} onChange={event => updatePositionSource(index, { start: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential end value for ${entry.marker.label}`} maxW='100px' type='number' placeholder='End' value={source.end} onChange={event => updatePositionSource(index, { end: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential step value for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Step' value={source.step} onChange={event => updatePositionSource(index, { step: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                            <Input size='xs' aria-label={`Sequential pad width for ${entry.marker.label}`} maxW='100px' type='number' placeholder='Pad' value={source.padTo} onChange={event => updatePositionSource(index, { padTo: event.target.value })} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                           </HStack>
                         ) : null}
                       </Box>
@@ -643,9 +643,9 @@ function IntruderPanel({ themeId }) {
                 </HStack>
 
                 <HStack wrap='wrap' mb={2}>
-                  <Input size='xs' maxW='120px' placeholder='Status' value={filters.statusCode} onChange={event => setFilters(prev => ({ ...prev, statusCode: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                  <Input size='xs' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
-                  <Input size='xs' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' aria-label='Filter intruder results by status code' maxW='120px' placeholder='Status' value={filters.statusCode} onChange={event => setFilters(prev => ({ ...prev, statusCode: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' aria-label='Filter intruder results by maximum response length' maxW='140px' placeholder='Max length' value={filters.maxLength} onChange={event => setFilters(prev => ({ ...prev, maxLength: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
+                  <Input size='xs' aria-label='Filter intruder results by maximum duration in milliseconds' maxW='160px' placeholder='Max duration ms' value={filters.maxDuration} onChange={event => setFilters(prev => ({ ...prev, maxDuration: event.target.value }))} color='fg.default' bg='bg.surface' borderColor='border.default' _placeholder={{ color: 'fg.muted' }} />
                   <Button size='xs' variant={filters.anomaliesOnly ? 'solid' : 'outline'} onClick={() => setFilters(prev => ({ ...prev, anomaliesOnly: !prev.anomaliesOnly }))}>Anomalies Only</Button>
                   <Box as='select' aria-label='Sort intruder results by' value={sortBy} onChange={event => setSortBy(event.target.value)} color='fg.default' bg='bg.surface' borderColor='border.default' borderWidth='1px' borderRadius='sm' px='2' h='1.75rem'>
                     <option value='duration'>Sort by Duration</option>

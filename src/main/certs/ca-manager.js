@@ -111,7 +111,7 @@ function createCaCertificate() {
 function createLeafCertificate({ hostname, caCert, caPrivateKey }) {
 	const safeHost = sanitizeHost(hostname);
 	if (!safeHost) {
-		throw new Error('getLeafCertificate(hostname) requires a valid hostname');
+		throw new TypeError('getLeafCertificate(hostname) requires a valid hostname');
 	}
 
 	const leafKeys = forge.pki.rsa.generateKeyPair(2048);
@@ -311,7 +311,7 @@ class CaManager {
 
 	exportCaCertificate(destPath) {
 		if (!destPath || typeof destPath !== 'string') {
-			throw new Error('exportCaCertificate(destPath) requires a destination path');
+			throw new TypeError('exportCaCertificate(destPath) requires a destination path');
 		}
 
 		if (!path.isAbsolute(destPath)) {
@@ -333,7 +333,7 @@ class CaManager {
 
 		const safeHost = sanitizeHost(hostname);
 		if (!safeHost) {
-			throw new Error('getLeafCertificate(hostname) requires a valid hostname');
+			throw new TypeError('getLeafCertificate(hostname) requires a valid hostname');
 		}
 
 		const certPath = path.join(this.leafDir, `${safeHost}.cert.pem`);

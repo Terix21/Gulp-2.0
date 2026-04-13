@@ -8,14 +8,7 @@ SEN-014 Rules engine
 
 const MAX_REGEX_LENGTH = 512;
 const SAFE_FLAGS_PATTERN = /^[imsu]{0,4}$/;
-const { clone } = require('./http-utils');
-
-function asString(value) {
-	if (value === null || value === undefined) {
-		return '';
-	}
-	return String(value);
-}
+const { clone, asString } = require('./http-utils');
 
 function matchesText(actual, condition) {
 	const text = asString(actual);

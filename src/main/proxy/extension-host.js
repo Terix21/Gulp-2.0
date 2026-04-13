@@ -13,7 +13,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { randomUUID } = require('node:crypto');
 const { EventEmitter } = require('node:events');
-const { clone, toText } = require('./http-utils');
+const { clone, toText, asArray } = require('./http-utils');
 
 const MAX_AUDIT_ITEMS = 500;
 const DEFAULT_TIMEOUT_MS = 150;
@@ -38,10 +38,6 @@ function validateExtensionId(id, label) {
 	if (!EXTENSION_ID_PATTERN.test(id)) {
 		throw new Error(`${label} contains invalid characters. Use only alphanumeric characters, dots, hyphens, and underscores, starting and ending with an alphanumeric character.`);
 	}
-}
-
-function asArray(value) {
-	return Array.isArray(value) ? value : [];
 }
 
 function ensureDir(targetPath) {

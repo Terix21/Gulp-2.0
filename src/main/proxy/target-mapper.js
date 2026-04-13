@@ -10,15 +10,10 @@ SEN-018 Target mapping and scope enforcement
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { clone } = require('./http-utils');
-
-const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+const { clone, splitLines, normalizeText } = require('./http-utils');
+const { MAX_IMPORT_FILE_BYTES } = require('./limits');
 const BURP_EXTENSIONS = new Set(['.xml', '.json']);
 const CSV_EXTENSIONS = new Set(['.csv']);
-
-function normalizeText(value) {
-	return String(value || '').trim();
-}
 
 function normalizeHost(host) {
 	return normalizeText(host).toLowerCase();
@@ -357,10 +352,7 @@ function parseDelimitedLine(line) {
 }
 
 function parseCsv(text) {
-	const lines = String(text || '')
-		.split(/\r?\n/g)
-		.map(line => line.trim())
-		.filter(Boolean);
+	const lines = splitLines(text);
 
 	if (lines.length === 0) {
 		return { headers: [], rows: [] };

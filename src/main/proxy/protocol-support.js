@@ -12,12 +12,13 @@ const net = require('node:net');
 const tls = require('node:tls');
 const { URL } = require('node:url');
 const { randomUUID } = require('node:crypto');
+const { normalizeHeaders: normalizeHeadersUtil } = require('./http-utils');
+const { MAX_REQUEST_BYTES } = require('./limits');
 const interceptEngineModule = require('./intercept-engine');
 const historyLogModule = require('./history-log');
 const rulesEngineModule = require('./rules-engine');
 const caManager = require('../certs/ca-manager');
 
-const MAX_REQUEST_BYTES = 25 * 1024 * 1024; // 25 MB
 const DEFAULT_TOOL_IDENTIFIER_HEADER = 'X-Sentinel-Tool';
 const DEFAULT_TOOL_IDENTIFIER_VALUE = 'Gulp-Sentinel';
 
@@ -110,18 +111,8 @@ function getForwardRuntimeConfig() {
 	return structuredClone(forwardRuntimeConfig);
 }
 
-function normalizeHeaders(rawHeaders = {}) {
-	const normalized = {};
-	for (const [name, value] of Object.entries(rawHeaders || {})) {
-		const key = String(name).toLowerCase();
-		if (Array.isArray(value)) {
-			normalized[key] = value.join(', ');
-		} else {
-			normalized[key] = value === undefined ? '' : String(value);
-		}
-	}
-	return normalized;
-}
+// Delegate to centralised http-utils implementation
+const normalizeHeaders = normalizeHeadersUtil;
 
 function isTextualContentType(contentType = '') {
 	const value = String(contentType || '').toLowerCase();

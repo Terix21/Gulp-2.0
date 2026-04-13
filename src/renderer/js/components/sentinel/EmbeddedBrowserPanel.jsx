@@ -419,13 +419,14 @@ function EmbeddedBrowserPanel({ themeId }) {
 
       {/* Address bar + nav controls */}
       <HStack flex='0 0 auto' gap='1'>
-        <Button size='xs' variant='ghost' onClick={() => runNavigation('back')} disabled={!activeSession?.canGoBack}>&#8592;</Button>
-        <Button size='xs' variant='ghost' onClick={() => runNavigation('forward')} disabled={!activeSession?.canGoForward}>&#8594;</Button>
-        <Button size='xs' variant='ghost' onClick={() => runNavigation('reload')} disabled={!activeSession}>&#8635;</Button>
-        <Button size='xs' variant='ghost' onClick={() => runNavigation('stop')} disabled={!activeSession?.loading}>&#x2715;</Button>
+        <Button size='xs' variant='ghost' aria-label='Back' onClick={() => runNavigation('back')} disabled={!activeSession?.canGoBack}>&#8592;</Button>
+        <Button size='xs' variant='ghost' aria-label='Forward' onClick={() => runNavigation('forward')} disabled={!activeSession?.canGoForward}>&#8594;</Button>
+        <Button size='xs' variant='ghost' aria-label='Reload' onClick={() => runNavigation('reload')} disabled={!activeSession}>&#8635;</Button>
+        <Button size='xs' variant='ghost' aria-label='Stop' onClick={() => runNavigation('stop')} disabled={!activeSession?.loading}>&#x2715;</Button>
         <Input
           flex='1'
           size='xs'
+          aria-label='Address bar'
           value={address}
           onChange={event => setAddress(event.target.value)}
           placeholder='https://target.example'

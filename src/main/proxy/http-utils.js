@@ -22,9 +22,36 @@ function toText(value) {
 function normalizeHeaders(headers = {}) {
 	const out = {};
 	for (const [name, value] of Object.entries(headers || {})) {
-		out[String(name || '').toLowerCase()] = toText(value);
+		const key = String(name || '').toLowerCase();
+		if (Array.isArray(value)) {
+			out[key] = value.join(', ');
+		} else {
+			out[key] = toText(value);
+		}
 	}
 	return out;
+}
+
+function splitLines(text) {
+	return String(text || '')
+		.split(/\r?\n/g)
+		.map(line => line.trim())
+		.filter(Boolean);
+}
+
+function asString(value) {
+	if (value === null || value === undefined) {
+		return '';
+	}
+	return String(value);
+}
+
+function asArray(value) {
+	return Array.isArray(value) ? value : [];
+}
+
+function normalizeText(value) {
+	return String(value || '').trim();
 }
 
 // Returns true when the character is a valid RFC 6265 cookie-name token character.
@@ -98,6 +125,10 @@ module.exports = {
 	clone,
 	toText,
 	normalizeHeaders,
+	splitLines,
+	asString,
+	asArray,
+	normalizeText,
 	isCookieNameChar,
 	canStartCookiePair,
 	splitCookieLine,
