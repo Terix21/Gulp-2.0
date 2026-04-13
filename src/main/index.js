@@ -116,9 +116,26 @@ async function stageExtensionPackage(packagePath) {
 
   const trustedRoot = getTrustedExtensionPackageRoot();
   const stagedPath = path.join(trustedRoot, `pkg-${randomUUID()}`);
+  const cleanup = async () => {
+    await fs.rm(stagedPath, { recursive: true, force: true });
+  };
+
   await fs.mkdir(trustedRoot, { recursive: true });
-  await fs.cp(resolvedSourcePath, stagedPath, { recursive: true });
-  return stagedPath;
+  try {
+    await fs.cp(resolvedSourcePath, stagedPath, { recursive: true });
+  } catch (error) {
+    try {
+      await cleanup();
+    } catch {
+      // Best-effort rollback: preserve staging error if cleanup also fails.
+    }
+    throw error;
+  }
+
+  return {
+    stagedPath,
+    cleanup,
+  };
 }
 
 function sendToRenderer(channel, payload) {
