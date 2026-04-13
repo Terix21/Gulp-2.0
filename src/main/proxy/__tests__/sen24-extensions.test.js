@@ -164,6 +164,35 @@ describe('SEN-024 extension host', () => {
     expect(String(installed.error || '')).toContain('trusted package roots');
   });
 
+  it('rejects package install when symlink inside trusted root points outside', () => {
+    const trustedDir = path.join(tempRoot, 'trusted');
+    const outsideDir = path.join(tempRoot, 'outside-symlink-target');
+    writeExtensionPackage(
+      outsideDir,
+      {
+        id: 'demo.symlink.bypass',
+        name: 'Symlink Bypass Extension',
+        version: '1.0.0',
+        main: 'index.js',
+        permissions: ['audit.write'],
+      },
+      'module.exports.activate = function() {};'
+    );
+    fs.mkdirSync(trustedDir, { recursive: true });
+    // Symlink inside trusted root → points to outside directory
+    const symlinkPath = path.join(trustedDir, 'evil-link');
+    fs.symlinkSync(outsideDir, symlinkPath);
+    host.configure({ trustedPackageRoots: [trustedDir] });
+
+    const installed = host.install({
+      packagePath: symlinkPath,
+      approvedPermissions: ['audit.write'],
+    });
+
+    expect(installed.ok).toBe(false);
+    expect(String(installed.error || '')).toContain('trusted package roots');
+  });
+
   it('drops extension events when per-window rate limit is exceeded', () => {
     host.configure({ eventWindowMs: 1000, eventBudgetPerWindow: 1 });
 

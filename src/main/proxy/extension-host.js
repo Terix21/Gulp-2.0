@@ -177,9 +177,13 @@ class ExtensionHost extends EventEmitter {
 		const sourcePath = path.resolve(toText(packagePath).trim());
 		const stat = fs.statSync(sourcePath);
 		const sourceDir = stat.isDirectory() ? sourcePath : path.dirname(sourcePath);
+		// Canonicalize via realpathSync so symlinks are resolved before the
+		// trusted-root check — prevents a symlink inside a root from pointing
+		// to an untrusted directory and bypassing the constraint.
+		const canonicalDir = fs.realpathSync(sourceDir);
 		if (
 			this.trustedPackageRoots.length > 0
-			&& !this.trustedPackageRoots.some(root => isPathWithin(root, sourceDir))
+			&& !this.trustedPackageRoots.some(root => isPathWithin(root, canonicalDir))
 		) {
 			throw new Error('Package path is outside configured trusted package roots.');
 		}
