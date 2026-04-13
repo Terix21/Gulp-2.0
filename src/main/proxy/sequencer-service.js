@@ -159,7 +159,7 @@ function extractBodyToken(body, key) {
 		if (result.token) {
 			return result.token;
 		}
-		pos = result.nextPos;
+		pos = idx + 1;
 	}
 	return '';
 }
