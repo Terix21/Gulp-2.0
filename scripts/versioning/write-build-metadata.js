@@ -2,18 +2,22 @@ const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
 
-// Resolve git to an absolute path to prevent PATH-hijacking attacks where a
-// malicious executable named 'git' is placed earlier in PATH.
+// Resolve git to an absolute path to avoid PATH-based binary lookup.
+// If no explicit or standard-location git binary is available, git metadata
+// falls back to 'unknown' instead of invoking a PATH-resolved executable.
 // GIT_BIN env var allows explicit pinning in CI or security-hardened environments.
 const GIT_BIN = (function resolveGitBin() {
   if (process.env.GIT_BIN) return process.env.GIT_BIN;
   const candidates = process.platform === 'win32'
     ? [String.raw`C:\Program Files\Git\bin\git.exe`, String.raw`C:\Program Files (x86)\Git\bin\git.exe`]
     : ['/usr/bin/git', '/usr/local/bin/git'];
-  return candidates.find(p => fs.existsSync(p)) ?? 'git';
+  return candidates.find(p => fs.existsSync(p)) ?? null;
 }());
 
 function runGit(args) {
+  if (!GIT_BIN) {
+    return 'unknown';
+  }
   try {
     return cp.execFileSync(GIT_BIN, args, {
       stdio: ['ignore', 'pipe', 'ignore'],
