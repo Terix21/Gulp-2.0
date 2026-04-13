@@ -10,14 +10,11 @@ SEN-018 Target mapping and scope enforcement
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { clone } = require('./http-utils');
 
 const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
 const BURP_EXTENSIONS = new Set(['.xml', '.json']);
 const CSV_EXTENSIONS = new Set(['.csv']);
-
-function clone(value) {
-	return structuredClone(value);
-}
 
 function normalizeText(value) {
 	return String(value || '').trim();

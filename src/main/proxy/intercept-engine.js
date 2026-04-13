@@ -8,10 +8,7 @@ SEN-014 Intercept engine
 'use strict';
 
 const { EventEmitter } = require('node:events');
-
-function clone(value) {
-  return structuredClone(value);
-}
+const { clone } = require('./http-utils');
 
 function mergeRequestEdits(baseRequest, editedRequest = {}) {
   const next = clone(baseRequest || {});

@@ -10,10 +10,7 @@ SEN-022 OOB callback tracking
 const http = require('node:http');
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
-
-function clone(value) {
-	return structuredClone(value);
-}
+const { clone } = require('./http-utils');
 
 function normalizeKind(kind) {
 	const value = String(kind || 'http').toLowerCase();

@@ -8,10 +8,7 @@ SEN-014 Rules engine
 
 const MAX_REGEX_LENGTH = 512;
 const SAFE_FLAGS_PATTERN = /^[imsu]{0,4}$/;
-
-function clone(value) {
-	return structuredClone(value);
-}
+const { clone } = require('./http-utils');
 
 function asString(value) {
 	if (value === null || value === undefined) {
@@ -186,7 +183,7 @@ function isRegexConditionSafe(condition) {
 }
 
 function validateRuleConditions(rule) {
-	const match = rule?.match || {};
+	const match = rule?.match ?? {};
 	const fieldConditions = [match?.host, match?.path, match?.url, match?.body].filter(Boolean);
 	for (const cond of fieldConditions) {
 		if (!isRegexConditionSafe(cond)) {

@@ -13,6 +13,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { randomUUID } = require('node:crypto');
 const { EventEmitter } = require('node:events');
+const { clone, toText } = require('./http-utils');
 
 const MAX_AUDIT_ITEMS = 500;
 const DEFAULT_TIMEOUT_MS = 150;
@@ -31,16 +32,6 @@ const DEFAULT_ALLOWED_EVENTS = [
 	'scope.transition',
 ];
 
-function toText(value) {
-	if (typeof value === 'string') {
-		return value;
-	}
-	if (value == null) {
-		return '';
-	}
-	return String(value);
-}
-
 const EXTENSION_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 
 function validateExtensionId(id, label) {
@@ -51,10 +42,6 @@ function validateExtensionId(id, label) {
 
 function asArray(value) {
 	return Array.isArray(value) ? value : [];
-}
-
-function clone(value) {
-	return structuredClone(value);
 }
 
 function ensureDir(targetPath) {
@@ -606,6 +593,38 @@ class ExtensionHost extends EventEmitter {
 		}
 	}
 
+	hasMatchingSubscription(extension, normalizedEvent) {
+		for (const subscribedEvent of extension.subscriptions.values()) {
+			if (subscribedEvent === normalizedEvent) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	deliverEventToExtension(extension, normalizedEvent, safePayload) {
+		if (!this.canProcessEvent(extension.id)) {
+			this.addAudit({
+				extensionId: extension.id,
+				type: 'security',
+				action: normalizedEvent,
+				status: 'error',
+				message: 'Event dropped due to extension rate limit.',
+			});
+			return 0;
+		}
+
+		let delivered = 0;
+		for (const [handlerId, subscribedEvent] of extension.subscriptions.entries()) {
+			if (subscribedEvent !== normalizedEvent) {
+				continue;
+			}
+			delivered += this.dispatchSubscriptionHandler(extension, handlerId, normalizedEvent, safePayload);
+		}
+
+		return delivered;
+	}
+
 	canProcessEvent(extensionId) {
 		if (!extensionId) {
 			return false;
@@ -635,33 +654,11 @@ class ExtensionHost extends EventEmitter {
 				continue;
 			}
 
-			let hasMatchingSubscription = false;
-			for (const subscribedEvent of extension.subscriptions.values()) {
-				if (subscribedEvent === normalizedEvent) {
-					hasMatchingSubscription = true;
-					break;
-				}
-			}
-			if (!hasMatchingSubscription) {
-				continue;
-			}
-			if (!this.canProcessEvent(extension.id)) {
-				this.addAudit({
-					extensionId: extension.id,
-					type: 'security',
-					action: normalizedEvent,
-					status: 'error',
-					message: 'Event dropped due to extension rate limit.',
-				});
+			if (!this.hasMatchingSubscription(extension, normalizedEvent)) {
 				continue;
 			}
 
-			for (const [handlerId, subscribedEvent] of extension.subscriptions.entries()) {
-				if (subscribedEvent !== normalizedEvent) {
-					continue;
-				}
-				delivered += this.dispatchSubscriptionHandler(extension, handlerId, normalizedEvent, safePayload);
-			}
+			delivered += this.deliverEventToExtension(extension, normalizedEvent, safePayload);
 		}
 
 		return { ok: true, delivered };

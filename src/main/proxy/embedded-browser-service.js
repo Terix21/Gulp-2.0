@@ -10,6 +10,7 @@ SEN-020 Embedded browser service
 const { URL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { EventEmitter } = require('node:events');
+const { clone } = require('./http-utils');
 
 const DEFAULT_BROWSER_HOST_MODEL = 'WebContentsView';
 const DEFAULT_ALLOWED_SCHEMES = ['http:', 'https:'];
@@ -18,10 +19,6 @@ const DEFAULT_SECURITY_PREFERENCES = Object.freeze({
 	nodeIntegration: false,
 	sandbox: true,
 });
-
-function clone(value) {
-	return structuredClone(value);
-}
 
 function clampNumber(value, fallback = 0) {
 	const numeric = Number(value);

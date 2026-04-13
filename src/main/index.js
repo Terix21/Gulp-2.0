@@ -1,6 +1,7 @@
 const electron = require('electron');
 const { app, BrowserWindow, ipcMain, dialog } = electron;
 const fs = require('node:fs/promises');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const caManager = require('./certs/ca-manager');
 const projectStore = require('./db/project-store');
@@ -16,6 +17,7 @@ const oobService = require('./proxy/oob-service');
 const sequencerService = require('./proxy/sequencer-service');
 const decoderService = require('./proxy/decoder-service');
 const extensionHost = require('./proxy/extension-host');
+const { installExtensionFromIpc } = require('./extension-ipc-install');
 const { registerProxyHandlers } = require('./proxy/proxy-ipc');
 const { registerBrowserHandlers } = require('./proxy/browser-ipc');
 const { mapRendererConsoleSeverity, normalizeRendererConsoleMessageArgs } = require('./renderer-console');
@@ -51,49 +53,10 @@ const PACKAGE_LOCK_PATH = path.join(__dirname, '..', '..', 'package-lock.json');
 let processOutputStreamingInstalled = false;
 let runtimeLogHooksInstalled = false;
 let consoleLogSequence = 0;
-const DEFAULT_PROXY_RUNTIME_CONFIG = {
-  customHeaders: {},
-  toolIdentifier: {
-    enabled: false,
-    headerName: 'X-Sentinel-Tool',
-    value: 'Gulp-Sentinel',
-  },
-  staticIpAddresses: [],
-};
-
-function normalizeProxyRuntimeConfig(input = {}) {
-  const customHeaders = {};
-  const rawHeaders = input && typeof input.customHeaders === 'object' && input.customHeaders
-    ? input.customHeaders
-    : {};
-  for (const [name, value] of Object.entries(rawHeaders)) {
-    const key = String(name || '').trim();
-    if (!key) {
-      continue;
-    }
-    customHeaders[key] = String(value == null ? '' : value);
-  }
-
-  const rawTool = input && typeof input.toolIdentifier === 'object' && input.toolIdentifier
-    ? input.toolIdentifier
-    : {};
-  const headerName = String(rawTool.headerName || DEFAULT_PROXY_RUNTIME_CONFIG.toolIdentifier.headerName).trim() || DEFAULT_PROXY_RUNTIME_CONFIG.toolIdentifier.headerName;
-  const value = String(rawTool.value == null ? DEFAULT_PROXY_RUNTIME_CONFIG.toolIdentifier.value : rawTool.value);
-
-  const ips = Array.isArray(input.staticIpAddresses)
-    ? [...new Set(input.staticIpAddresses.map(ip => String(ip || '').trim()).filter(Boolean))]
-    : [];
-
-  return {
-    customHeaders,
-    toolIdentifier: {
-      enabled: Boolean(rawTool.enabled),
-      headerName,
-      value,
-    },
-    staticIpAddresses: ips,
-  };
-}
+// Single source of truth for config defaults and normalisation lives in protocol-support.
+// index.js surfaces them under the legacy names expected by proxy-ipc.js.
+const { normalizeForwardRuntimeConfig: normalizeProxyRuntimeConfig } = protocolSupport;
+const DEFAULT_PROXY_RUNTIME_CONFIG = normalizeProxyRuntimeConfig({});
 
 function stringifyLogValue(value) {
   if (value === undefined || value === null) {
@@ -126,6 +89,36 @@ function getActiveWindow() {
 
   const [firstWindow] = BrowserWindow.getAllWindows();
   return firstWindow || null;
+}
+
+function getTrustedExtensionPackageRoot() {
+  return path.join(app.getPath('userData'), 'extensions-packages');
+}
+
+function getServerApprovedExtensionPermissions() {
+  if (!extensionHost || !(extensionHost.allowedPermissions instanceof Set)) {
+    return [];
+  }
+  return Array.from(extensionHost.allowedPermissions.values()).sort((a, b) => a.localeCompare(b));
+}
+
+async function stageExtensionPackage(packagePath) {
+  const sourcePath = typeof packagePath === 'string' ? packagePath.trim() : '';
+  if (!sourcePath) {
+    throw new TypeError('packagePath is required');
+  }
+
+  const resolvedSourcePath = path.resolve(sourcePath);
+  const sourceStat = await fs.stat(resolvedSourcePath);
+  if (!sourceStat.isDirectory()) {
+    throw new TypeError('Only extension package directories are supported.');
+  }
+
+  const trustedRoot = getTrustedExtensionPackageRoot();
+  const stagedPath = path.join(trustedRoot, `pkg-${randomUUID()}`);
+  await fs.mkdir(trustedRoot, { recursive: true });
+  await fs.cp(resolvedSourcePath, stagedPath, { recursive: true });
+  return stagedPath;
 }
 
 function sendToRenderer(channel, payload) {
@@ -449,7 +442,12 @@ function registerExtensionHandlers() {
   });
 
   ipcMain.handle('extensions:install', async (_event, args = {}) => {
-    return extensionHost.install(args);
+    return installExtensionFromIpc({
+      args,
+      stageExtensionPackage,
+      getApprovedPermissions: getServerApprovedExtensionPermissions,
+      extensionHost,
+    });
   });
 
   ipcMain.handle('extensions:uninstall', async (_event, args = {}) => {
@@ -571,6 +569,7 @@ app.whenReady().then(() => {
 
   extensionHost.configure({
     extensionsDir: path.join(app.getPath('userData'), 'extensions'),
+    trustedPackageRoots: [getTrustedExtensionPackageRoot()],
   });
 
   if (typeof protocolSupport.setLogger === 'function') {

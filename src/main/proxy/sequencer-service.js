@@ -9,23 +9,10 @@ SEN-023 Sequencer entropy analysis
 
 const { randomUUID } = require('node:crypto');
 const { forwardRequest: defaultForwardRequest } = require('./protocol-support');
+const { clone, toText, normalizeHeaders, isCookieNameChar, canStartCookiePair, splitCookieLine } = require('./http-utils');
 
 // Maximum accepted length for a user-supplied token key to bound regex/parse complexity.
 const MAX_TOKEN_KEY_LEN = 256;
-
-function clone(value) {
-	return structuredClone(value);
-}
-
-function toText(value) {
-	if (typeof value === 'string') {
-		return value;
-	}
-	if (value == null) {
-		return '';
-	}
-	return String(value);
-}
 
 function shannonEntropyBitsPerChar(values = []) {
 	const text = values.join('');
@@ -167,76 +154,6 @@ function extractBodyToken(body, key) {
 		pos = idx + 1;
 	}
 	return '';
-}
-
-function normalizeHeaders(headers = {}) {
-	const out = {};
-	for (const [name, value] of Object.entries(headers || {})) {
-		out[String(name || '').toLowerCase()] = toText(value);
-	}
-	return out;
-}
-
-function isCookieNameChar(character) {
-	if (!character) {
-		return false;
-	}
-	const code = character.codePointAt(0);
-	return (
-		(code >= 48 && code <= 57)
-		|| (code >= 65 && code <= 90)
-		|| (code >= 97 && code <= 122)
-		|| character === '!'
-		|| character === '#'
-		|| character === '$'
-		|| character === '%'
-		|| character === '&'
-		|| character === '\''
-		|| character === '*'
-		|| character === '+'
-		|| character === '-'
-		|| character === '.'
-		|| character === '^'
-		|| character === '_'
-		|| character === '`'
-		|| character === '|'
-		|| character === '~'
-	);
-}
-
-function canStartCookiePair(text, index) {
-	let cursor = index;
-	while (cursor < text.length && (text[cursor] === ' ' || text[cursor] === '\t')) {
-		cursor += 1;
-	}
-
-	const start = cursor;
-	while (cursor < text.length && isCookieNameChar(text[cursor])) {
-		cursor += 1;
-	}
-
-	return cursor !== start && cursor < text.length && text[cursor] === '=';
-}
-
-function splitCookieLine(line) {
-	const segments = [];
-	let start = 0;
-
-	for (let i = 0; i < line.length; i += 1) {
-		if (line[i] !== ',') {
-			continue;
-		}
-
-		if (!canStartCookiePair(line, i + 1)) {
-			continue;
-		}
-
-		segments.push(line.slice(start, i).trim());
-		start = i + 1;
-	}
-
-	segments.push(line.slice(start).trim());
-	return segments.filter(Boolean);
 }
 
 function parseCookies(setCookieHeader) {

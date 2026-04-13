@@ -12,6 +12,7 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { randomUUID } = require('node:crypto');
 const { forwardRequest } = require('./protocol-support');
+const { clone } = require('./http-utils');
 
 const MAX_GENERATED_PAYLOADS = 250;
 const MAX_ATTACK_REQUESTS = 500;
@@ -19,10 +20,6 @@ const MAX_DICTIONARY_FILE_BYTES = 2 * 1024 * 1024;
 // Only plain-text line-based formats are valid dictionary sources.
 const DICTIONARY_EXTENSIONS = new Set(['.txt', '.csv', '.lst', '.log', '']);
 const MARKER_REGEX = /§([^§]*)§/g;
-
-function clone(value) {
-	return structuredClone(value);
-}
 
 function splitLines(text) {
 	return String(text || '')

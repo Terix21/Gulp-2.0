@@ -797,3 +797,6 @@ module.exports.createProtocolSupport = createProtocolSupport;
 module.exports.forwardRequest = forwardRequest;
 module.exports.setForwardRuntimeConfig = setForwardRuntimeConfig;
 module.exports.getForwardRuntimeConfig = getForwardRuntimeConfig;
+module.exports.normalizeForwardRuntimeConfig = normalizeForwardRuntimeConfig;
+module.exports.DEFAULT_TOOL_IDENTIFIER_HEADER = DEFAULT_TOOL_IDENTIFIER_HEADER;
+module.exports.DEFAULT_TOOL_IDENTIFIER_VALUE = DEFAULT_TOOL_IDENTIFIER_VALUE;

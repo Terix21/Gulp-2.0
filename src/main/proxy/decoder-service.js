@@ -8,10 +8,7 @@ SEN-019 Decoder transformations
 'use strict';
 
 const zlib = require('node:zlib');
-
-function clone(value) {
-	return structuredClone(value);
-}
+const { clone } = require('./http-utils');
 
 function encodeHtmlEntities(input) {
 	return String(input || '')

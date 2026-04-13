@@ -9,10 +9,7 @@ SEN-016 Repeater service
 
 const { randomUUID } = require('node:crypto');
 const { forwardRequest } = require('./protocol-support');
-
-function clone(value) {
-	return structuredClone(value);
-}
+const { clone } = require('./http-utils');
 
 /**
  * Strip rawBody (Buffer) before storing — keep rawBodyBase64 instead.
