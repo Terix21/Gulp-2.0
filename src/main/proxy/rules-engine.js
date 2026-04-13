@@ -152,10 +152,12 @@ function applyAction(request, action = {}) {
 	}
 
 	if (type === 'replace') {
-		const hasFind = Object.hasOwn(action, 'find');
-		next[target] = hasFind
-			? replaceInField(current, action.find, action.replace)
-			: asString(action.value || '');
+		const hasFind = Object.hasOwn(action ?? {}, 'find');
+		if (hasFind) {
+			next[target] = replaceInField(current, action.find, action.replace);
+			return next;
+		}
+		next[target] = asString(action.value || '');
 		return next;
 	}
 
@@ -185,13 +187,13 @@ function isRegexConditionSafe(condition) {
 
 function validateRuleConditions(rule) {
 	const match = rule?.match || {};
-	const fieldConditions = [match.host, match.path, match.url, match.body].filter(Boolean);
+	const fieldConditions = [match?.host, match?.path, match?.url, match?.body].filter(Boolean);
 	for (const cond of fieldConditions) {
 		if (!isRegexConditionSafe(cond)) {
 			return false;
 		}
 	}
-	const headerConditions = Object.values(match.headers || {});
+	const headerConditions = Object.values(match?.headers || {});
 	for (const cond of headerConditions) {
 		if (!isRegexConditionSafe(cond)) {
 			return false;
@@ -208,7 +210,11 @@ class RulesEngine {
 	}
 
 	setScopeEvaluator(evaluator) {
-		this.scopeEvaluator = typeof evaluator === 'function' ? evaluator : null;
+		if (typeof evaluator === 'function') {
+			this.scopeEvaluator = evaluator;
+			return { ok: true };
+		}
+		this.scopeEvaluator = null;
 		return { ok: true };
 	}
 
@@ -219,7 +225,11 @@ class RulesEngine {
 		const accepted = [];
 		const rejected = [];
 		for (const rule of rules) {
-			(validateRuleConditions(rule) ? accepted : rejected).push(rule);
+			if (validateRuleConditions(rule)) {
+				accepted.push(rule);
+			} else {
+				rejected.push(rule);
+			}
 		}
 		this.rules = accepted
 			.map(rule => clone(rule))
